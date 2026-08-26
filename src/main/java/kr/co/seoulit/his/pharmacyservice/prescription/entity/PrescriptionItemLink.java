@@ -7,7 +7,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import kr.co.seoulit.his.pharmacyservice.common.entity.BaseEntity;
+import kr.co.seoulit.his.pharmacyservice.common.BaseEntity;
 
 import java.math.BigDecimal;
 
