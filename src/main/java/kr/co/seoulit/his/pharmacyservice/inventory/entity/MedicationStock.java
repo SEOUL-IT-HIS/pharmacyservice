@@ -7,7 +7,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import kr.co.seoulit.his.pharmacyservice.common.entity.BaseEntity;
+import kr.co.seoulit.his.pharmacyservice.common.BaseEntity;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -47,6 +47,13 @@ public class MedicationStock extends BaseEntity {
     public BigDecimal increaseQty(BigDecimal qty, LocalDateTime movementAt) {
         BigDecimal beforeQty = this.currentQty;
         this.currentQty = this.currentQty.add(qty);
+        this.lastMovementAt = movementAt;
+        return beforeQty;
+    }
+
+    public BigDecimal decreaseQty(BigDecimal qty, LocalDateTime movementAt) {
+        BigDecimal beforeQty = this.currentQty;
+        this.currentQty = this.currentQty.subtract(qty);
         this.lastMovementAt = movementAt;
         return beforeQty;
     }

@@ -1,6 +1,6 @@
 package kr.co.seoulit.his.pharmacyservice.inventory.controller;
 
-import kr.co.seoulit.his.pharmacyservice.common.response.ApiResponse;
+import kr.co.seoulit.his.pharmacyservice.common.ApiResponse;
 import kr.co.seoulit.his.pharmacyservice.inventory.dto.InventoryResponse;
 import kr.co.seoulit.his.pharmacyservice.inventory.service.InventoryService;
 import org.springframework.data.domain.Page;

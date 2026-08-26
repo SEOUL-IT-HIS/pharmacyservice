@@ -11,6 +11,7 @@ public record InventoryResponse(
         String medicationStockId,
         String medicationLotId,
         String medicationId,
+        String medicationName,
         String lotNo,
         LocalDate expirationDt,
         LocalDate manufactureDt,
@@ -20,12 +21,13 @@ public record InventoryResponse(
         LocalDateTime lastMovementAt
 ) {
 
-    public static InventoryResponse from(MedicationStock stock) {
+    public static InventoryResponse from(MedicationStock stock, String medicationName) {
         MedicationLot lot = stock.getMedicationLot();
         return new InventoryResponse(
                 stock.getMedicationStockId(),
                 lot.getMedicationLotId(),
                 lot.getMedicationId(),
+                medicationName,
                 lot.getLotNo(),
                 lot.getExpirationDt(),
                 lot.getManufactureDt(),
