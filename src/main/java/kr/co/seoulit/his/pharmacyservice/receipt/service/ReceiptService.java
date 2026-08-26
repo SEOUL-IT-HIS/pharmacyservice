@@ -1,15 +1,17 @@
 package kr.co.seoulit.his.pharmacyservice.receipt.service;
 
-import kr.co.seoulit.his.pharmacyservice.common.exception.BusinessException;
-import kr.co.seoulit.his.pharmacyservice.common.exception.ErrorCode;
+import kr.co.seoulit.his.pharmacyservice.common.BusinessException;
+import kr.co.seoulit.his.pharmacyservice.common.ErrorCode;
 import kr.co.seoulit.his.pharmacyservice.inventory.entity.MedicationLot;
 import kr.co.seoulit.his.pharmacyservice.inventory.entity.MedicationStock;
 import kr.co.seoulit.his.pharmacyservice.inventory.repository.MedicationLotRepository;
 import kr.co.seoulit.his.pharmacyservice.inventory.repository.MedicationStockRepository;
+import kr.co.seoulit.his.pharmacyservice.medication.repository.MedicationRepository;
 import kr.co.seoulit.his.pharmacyservice.receipt.dto.ReceiptCreateRequest;
 import kr.co.seoulit.his.pharmacyservice.receipt.dto.ReceiptCreateResponse;
 import kr.co.seoulit.his.pharmacyservice.receipt.dto.ReceiptItemRequest;
 import kr.co.seoulit.his.pharmacyservice.receipt.dto.ReceiptItemResult;
+import kr.co.seoulit.his.pharmacyservice.receipt.dto.ReceiptListResponse;
 import kr.co.seoulit.his.pharmacyservice.receipt.entity.InventoryMovement;
 import kr.co.seoulit.his.pharmacyservice.receipt.entity.MedicationReceipt;
 import kr.co.seoulit.his.pharmacyservice.receipt.entity.MedicationReceiptItem;
@@ -22,8 +24,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -37,17 +41,20 @@ public class ReceiptService {
     private final MedicationLotRepository medicationLotRepository;
     private final MedicationStockRepository medicationStockRepository;
     private final InventoryMovementRepository inventoryMovementRepository;
+    private final MedicationRepository medicationRepository;
 
     public ReceiptService(MedicationReceiptRepository medicationReceiptRepository,
                            MedicationReceiptItemRepository medicationReceiptItemRepository,
                            MedicationLotRepository medicationLotRepository,
                            MedicationStockRepository medicationStockRepository,
-                           InventoryMovementRepository inventoryMovementRepository) {
+                           InventoryMovementRepository inventoryMovementRepository,
+                           MedicationRepository medicationRepository) {
         this.medicationReceiptRepository = medicationReceiptRepository;
         this.medicationReceiptItemRepository = medicationReceiptItemRepository;
         this.medicationLotRepository = medicationLotRepository;
         this.medicationStockRepository = medicationStockRepository;
         this.inventoryMovementRepository = inventoryMovementRepository;
+        this.medicationRepository = medicationRepository;
     }
 
     @Transactional
@@ -66,6 +73,42 @@ public class ReceiptService {
         }
 
         return new ReceiptCreateResponse(receipt.getMedicationReceiptId(), results);
+    }
+
+    /** 입고 조회(HL2-7) 화면용 — 약품별 입고 항목 목록 */
+    @Transactional(readOnly = true)
+    public List<ReceiptListResponse> list() {
+        List<MedicationReceiptItem> items = medicationReceiptItemRepository.findAllWithLot();
+        Map<Long, String> nameByMedicationId = loadMedicationNames(items);
+        return items.stream()
+                .map(item -> ReceiptListResponse.from(
+                        item, nameByMedicationId.get(parseMedicationId(item.getMedicationLot().getMedicationId()))))
+                .toList();
+    }
+
+    private Map<Long, String> loadMedicationNames(List<MedicationReceiptItem> items) {
+        Set<Long> ids = new HashSet<>();
+        for (MedicationReceiptItem item : items) {
+            Long id = parseMedicationId(item.getMedicationLot().getMedicationId());
+            if (id != null) {
+                ids.add(id);
+            }
+        }
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> nameById = new HashMap<>();
+        medicationRepository.findAllById(ids)
+                .forEach(m -> nameById.put(m.getMedicationId(), m.getMedicationName()));
+        return nameById;
+    }
+
+    private Long parseMedicationId(String medicationId) {
+        try {
+            return Long.parseLong(medicationId);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private ReceiptItemResult receiveItem(MedicationReceipt receipt, ReceiptItemRequest itemRequest,
