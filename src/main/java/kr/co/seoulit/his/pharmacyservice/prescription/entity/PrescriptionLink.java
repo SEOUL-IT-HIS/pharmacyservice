@@ -4,7 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import kr.co.seoulit.his.pharmacyservice.common.entity.BaseEntity;
+import kr.co.seoulit.his.pharmacyservice.common.BaseEntity;
 
 import java.time.LocalDateTime;
 

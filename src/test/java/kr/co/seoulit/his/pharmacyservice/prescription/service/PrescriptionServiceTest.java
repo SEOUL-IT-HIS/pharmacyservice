@@ -1,7 +1,7 @@
 package kr.co.seoulit.his.pharmacyservice.prescription.service;
 
-import kr.co.seoulit.his.pharmacyservice.common.exception.BusinessException;
-import kr.co.seoulit.his.pharmacyservice.common.exception.ErrorCode;
+import kr.co.seoulit.his.pharmacyservice.common.BusinessException;
+import kr.co.seoulit.his.pharmacyservice.common.ErrorCode;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionDetailResponse;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionListResponse;
 import kr.co.seoulit.his.pharmacyservice.prescription.entity.PrescriptionLink;

@@ -1,6 +1,6 @@
 package kr.co.seoulit.his.pharmacyservice.prescription.controller;
 
-import kr.co.seoulit.his.pharmacyservice.common.response.ApiResponse;
+import kr.co.seoulit.his.pharmacyservice.common.ApiResponse;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionDetailResponse;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionListResponse;
 import kr.co.seoulit.his.pharmacyservice.prescription.service.PrescriptionService;
