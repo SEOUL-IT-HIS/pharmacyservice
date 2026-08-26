@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 public interface MedicationStockRepository extends JpaRepository<MedicationStock, String> {
@@ -34,4 +35,13 @@ public interface MedicationStockRepository extends JpaRepository<MedicationStock
     Optional<MedicationStock> findByIdWithLot(@Param("medicationStockId") String medicationStockId);
 
     Optional<MedicationStock> findByMedicationLot_MedicationLotIdAndStorageLocationId(String medicationLotId, String storageLocationId);
+
+    /** 출고(HL2-8)용 — 재고가 남아있는 로트를 유효기간이 빠른 순(FEFO)으로 조회 */
+    @Query("""
+            SELECT s FROM MedicationStock s
+            JOIN FETCH s.medicationLot l
+            WHERE l.medicationId = :medicationId AND s.currentQty > 0
+            ORDER BY l.expirationDt ASC
+            """)
+    List<MedicationStock> findAvailableByMedicationIdOrderByExpirationDtAsc(@Param("medicationId") String medicationId);
 }

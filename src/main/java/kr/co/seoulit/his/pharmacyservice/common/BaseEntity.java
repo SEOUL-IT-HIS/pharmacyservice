@@ -1,4 +1,4 @@
-package kr.co.seoulit.his.pharmacyservice.common.entity;
+package kr.co.seoulit.his.pharmacyservice.common;
 
 import jakarta.persistence.MappedSuperclass;
 import jakarta.persistence.PostLoad;
