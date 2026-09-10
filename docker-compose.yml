@@ -1,0 +1,21 @@
+services:
+  kafka:
+    image: apache/kafka:3.8.0
+    container_name: pharmacy-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      # 로컬 테스트용이라 토픽을 미리 안 만들어도 최초 publish 시 자동 생성되게 켜둠.
+      # (application.properties 기본값은 수납팀 공유 브로커(192.168.1.126:9092)를 가리키므로,
+      #  이 로컬 브로커로 테스트하려면 KAFKA_BOOTSTRAP_SERVERS=localhost:9092로 덮어써야 한다.
+      #  토픽명(opd.pharmacy-order.requested.v1)은 이걸로 자동 생성됨)
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"

@@ -18,14 +18,7 @@ public class WebConfig implements WebMvcConfigurer {
         String[] origins = appProperties.getCors().getAllowedOriginPatterns()
                 .toArray(String[]::new);
 
-        registry.addMapping("/admin/**")
-                .allowedOriginPatterns(origins)
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                .allowedHeaders("*")
-                .allowCredentials(true);
-
-        // /admin/** 만 열려있어서 /api/pharmacy/** (재고·입고·처방전) 호출이
-        // 브라우저에서 CORS로 막혔었음 — 같은 규칙을 이쪽 경로에도 추가
+        // 전체 API 경로 통일: /api/pharmacy/** (관리자용 포함)
         registry.addMapping("/api/pharmacy/**")
                 .allowedOriginPatterns(origins)
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")

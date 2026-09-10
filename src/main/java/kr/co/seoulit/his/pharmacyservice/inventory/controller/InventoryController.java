@@ -1,6 +1,6 @@
 package kr.co.seoulit.his.pharmacyservice.inventory.controller;
 
-import kr.co.seoulit.his.pharmacyservice.common.response.ApiResponse;
+import kr.co.seoulit.his.pharmacyservice.common.ApiResponse;
 import kr.co.seoulit.his.pharmacyservice.inventory.dto.InventoryResponse;
 import kr.co.seoulit.his.pharmacyservice.inventory.service.InventoryService;
 import org.springframework.data.domain.Page;
@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/pharmacy/inventories")
@@ -44,5 +46,14 @@ public class InventoryController {
     @GetMapping("/{medicationStockId}")
     public ApiResponse<InventoryResponse> getDetail(@PathVariable String medicationStockId) {
         return ApiResponse.success(inventoryService.getDetail(medicationStockId));
+    }
+
+    /**
+     * 수업 과제: PL/SQL 프로시저(PROC_PHARMACY_2, SYS_REFCURSOR) 호출 결과 확인용.
+     * 예: GET /api/pharmacy/inventories/low-stock-list?threshold=100
+     */
+    @GetMapping("/low-stock-list")
+    public ApiResponse<List<Map<String, Object>>> medicationsStock(@RequestParam int threshold) {
+        return ApiResponse.success(inventoryService.medicationsStock(threshold));
     }
 }

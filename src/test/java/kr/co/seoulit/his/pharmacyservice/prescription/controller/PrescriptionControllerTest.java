@@ -1,16 +1,17 @@
 package kr.co.seoulit.his.pharmacyservice.prescription.controller;
 
-import kr.co.seoulit.his.pharmacyservice.common.exception.BusinessException;
-import kr.co.seoulit.his.pharmacyservice.common.exception.ErrorCode;
+import kr.co.seoulit.his.pharmacyservice.common.BusinessException;
+import kr.co.seoulit.his.pharmacyservice.common.ErrorCode;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionDetailResponse;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionListResponse;
 import kr.co.seoulit.his.pharmacyservice.prescription.service.PrescriptionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.boot.webmvc.test.autoconfigure       .WebMvcTest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -18,8 +19,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -31,6 +34,77 @@ class PrescriptionControllerTest {
 
     @MockitoBean
     private PrescriptionService prescriptionService;
+
+    @Test
+    void create_returns201_whenValid() throws Exception {
+        String body = """
+                {
+                  "prescriptionId": "PRESCRIPTION-100",
+                  "patientId": "PATIENT-001",
+                  "physicianId": "PHYSICIAN-001",
+                  "departmentId": "DEPARTMENT-001",
+                  "createdAt": "2026-07-16T09:00:00+09:00",
+                  "items": [
+                    {
+                      "ediCode": "EDI-001",
+                      "itemName": "타이레놀정500mg",
+                      "dosageQty": 500,
+                      "dosageFormCd": "TAB",
+                      "frequency": "1일 3회",
+                      "durationDays": "5일",
+                      "detailInfo": "식후 30분 복용"
+                    }
+                  ]
+                }
+                """;
+
+        mockMvc.perform(post("/api/pharmacy/prescriptions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated());
+
+        verify(prescriptionService).save(any());
+    }
+
+    @Test
+    void create_returns400_whenPrescriptionIdBlank() throws Exception {
+        String body = """
+                {
+                  "prescriptionId": "",
+                  "patientId": "PATIENT-001",
+                  "physicianId": "PHYSICIAN-001",
+                  "departmentId": "DEPARTMENT-001",
+                  "createdAt": "2026-07-16T09:00:00+09:00",
+                  "items": [
+                    {"ediCode": "EDI-001", "dosageQty": 500, "dosageFormCd": "TAB"}
+                  ]
+                }
+                """;
+
+        mockMvc.perform(post("/api/pharmacy/prescriptions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void create_returns400_whenItemsEmpty() throws Exception {
+        String body = """
+                {
+                  "prescriptionId": "PRESCRIPTION-101",
+                  "patientId": "PATIENT-001",
+                  "physicianId": "PHYSICIAN-001",
+                  "departmentId": "DEPARTMENT-001",
+                  "createdAt": "2026-07-16T09:00:00+09:00",
+                  "items": []
+                }
+                """;
+
+        mockMvc.perform(post("/api/pharmacy/prescriptions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest());
+    }
 
     @Test
     void search_returns200_withList() throws Exception {

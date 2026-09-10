@@ -9,6 +9,9 @@ public interface MedicationService {
 
     List<MedicationDto> getMedicationList();
 
+    /** 외래 처방전 작성 화면용 — 약품명 일부로 검색(자동완성) */
+    List<MedicationDto> search(String medicationName);
+
     void registerMedication(MedicationRegisterRequest request);
 
     /** 공공API(의약품 낱알식별정보)에서 약품 정보를 가져와 ITEM_SEQ 기준으로 저장/갱신한다. */

@@ -8,7 +8,10 @@ public record PrescriptionItemResponse(
         String prescriptionItemLinkId,
         String medicationId,
         BigDecimal dosageQty,
-        String dosageFormCd
+        String dosageFormCd,
+        String frequency,
+        String durationDays,
+        String detailInfo
 ) {
 
     public static PrescriptionItemResponse from(PrescriptionItemLink item) {
@@ -16,7 +19,10 @@ public record PrescriptionItemResponse(
                 item.getPrescriptionItemLinkId(),
                 item.getMedicationId(),
                 item.getDosageQty(),
-                item.getDosageFormCd()
+                item.getDosageFormCd(),
+                item.getFrequency(),
+                item.getDurationDays(),
+                item.getDetailInfo()
         );
     }
 }

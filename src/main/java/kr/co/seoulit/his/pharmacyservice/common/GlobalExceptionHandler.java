@@ -3,9 +3,9 @@ package kr.co.seoulit.his.pharmacyservice.common;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @Slf4j
 @RestControllerAdvice
@@ -17,10 +17,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(errorCode.getCode()).body(ApiResponse.error(errorCode));
     }
 
-//    @ExceptionHandler(NoResourceFoundException.class)
-//    public ResponseEntity<Void> handleNoResourceFoundException(NoResourceFoundException ex) {
-//        return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-//    }
+    // @Valid 검증 실패(필수값 누락 등)는 이게 없으면 catch-all(Exception)에 잡혀서 500으로 잘못 나간다.
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Void>> handleValidationException(MethodArgumentNotValidException ex) {
+        log.warn("요청 검증 실패: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(ErrorCode.BAD_REQUEST));
+    }
 
     // BusinessException이 아닌 나머지 모든 예외(NPE 등)를 여기서 잡는다.
     // 콘솔엔 log.error로 스택트레이스가 그대로 남으니 디버깅엔 문제 없고,

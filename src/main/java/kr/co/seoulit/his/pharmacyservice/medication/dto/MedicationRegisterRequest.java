@@ -1,5 +1,6 @@
 package kr.co.seoulit.his.pharmacyservice.medication.dto;
 
+import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -9,6 +10,7 @@ import java.time.LocalDate;
 @Setter
 public class MedicationRegisterRequest {
 
+    @NotBlank
     private String medicationName;
     private String itemSeq;
     private String itemEngName;

@@ -52,12 +52,21 @@ public class MedicationServiceImpl implements MedicationService {
     }
 
     @Override
+    public List<MedicationDto> search(String medicationName) {
+        if (!StringUtils.hasText(medicationName)) {
+            return List.of();
+        }
+        return medicationRepository
+                .findTop20ByMedicationNameContainingIgnoreCaseOrderByMedicationNameAsc(medicationName.trim())
+                .stream()
+                .map(this::toMedicationDto)
+                .toList();
+    }
+
+    @Override
     @Transactional
     public void registerMedication(MedicationRegisterRequest request) {
-        if (!StringUtils.hasText(request.getMedicationName())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
-        }
-
+        // medicationName 필수 체크는 컨트롤러의 @Valid(@NotBlank)가 처리한다.
         Medication medication = new Medication();
         medication.setMedicationName(request.getMedicationName().trim());
         medication.setItemSeq(blankToNull(request.getItemSeq()));

@@ -7,7 +7,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Optional;
+
 public interface PrescriptionLinkRepository extends JpaRepository<PrescriptionLink, String> {
+
+    // 카프카 이벤트 중복 수신(재전송) 시 이미 저장된 처방전인지 확인하기 위한 조회
+    Optional<PrescriptionLink> findByPrescriptionId(String prescriptionId);
 
     @Query("""
             SELECT p FROM PrescriptionLink p

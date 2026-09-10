@@ -4,9 +4,10 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import kr.co.seoulit.his.pharmacyservice.common.entity.BaseEntity;
+import kr.co.seoulit.his.pharmacyservice.common.BaseEntity;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "PRESCRIPTION_LINK")
@@ -16,7 +17,8 @@ public class PrescriptionLink extends BaseEntity {
     @Column(name = "PRESCRIPTION_LINK_ID", length = 36)
     private String prescriptionLinkId;
 
-    @Column(name = "PRESCRIPTION_ID", nullable = false)
+    // 외래(GR2)의 처방전 고유번호. 카프카 이벤트 중복 수신 시 이 값으로 중복 저장을 막는다.
+    @Column(name = "PRESCRIPTION_ID", nullable = false, unique = true)
     private String prescriptionId;
 
     @Column(name = "PATIENT_ID", nullable = false)
@@ -31,7 +33,17 @@ public class PrescriptionLink extends BaseEntity {
     @Column(name = "CREATED_AT", nullable = false)
     private LocalDateTime createdAt;
 
-    public PrescriptionLink() {
+    protected PrescriptionLink() {
+    }
+
+    public PrescriptionLink(String prescriptionId, String patientId, String physicianId,
+                             String departmentId, LocalDateTime createdAt) {
+        this.prescriptionLinkId = UUID.randomUUID().toString();
+        this.prescriptionId = prescriptionId;
+        this.patientId = patientId;
+        this.physicianId = physicianId;
+        this.departmentId = departmentId;
+        this.createdAt = createdAt;
     }
 
     @Override
