@@ -1,6 +1,7 @@
 package kr.co.seoulit.his.pharmacyservice.prescription.dto;
 
 import kr.co.seoulit.his.pharmacyservice.prescription.entity.PrescriptionLink;
+import kr.co.seoulit.his.pharmacyservice.prescription.entity.PrescriptionStatus;
 
 import java.time.LocalDateTime;
 
@@ -10,7 +11,8 @@ public record PrescriptionListResponse(
         String patientId,
         String physicianId,
         String departmentId,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        PrescriptionStatus status
 ) {
 
     public static PrescriptionListResponse from(PrescriptionLink link) {
@@ -20,7 +22,8 @@ public record PrescriptionListResponse(
                 link.getPatientId(),
                 link.getPhysicianId(),
                 link.getDepartmentId(),
-                link.getCreatedAt()
+                link.getCreatedAt(),
+                link.getStatus()
         );
     }
 }

@@ -12,6 +12,8 @@ import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionItemRespon
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionListResponse;
 import kr.co.seoulit.his.pharmacyservice.prescription.entity.PrescriptionItemLink;
 import kr.co.seoulit.his.pharmacyservice.prescription.entity.PrescriptionLink;
+import kr.co.seoulit.his.pharmacyservice.prescription.entity.PrescriptionStatus;
+import kr.co.seoulit.his.pharmacyservice.prescription.publisher.PrescriptionResultPublisher;
 import kr.co.seoulit.his.pharmacyservice.prescription.repository.PrescriptionItemLinkRepository;
 import kr.co.seoulit.his.pharmacyservice.prescription.repository.PrescriptionLinkRepository;
 import org.slf4j.Logger;
@@ -32,13 +34,16 @@ public class PrescriptionService {
     private final PrescriptionLinkRepository prescriptionLinkRepository;
     private final PrescriptionItemLinkRepository prescriptionItemLinkRepository;
     private final MedicationRepository medicationRepository;
+    private final PrescriptionResultPublisher prescriptionResultPublisher;
 
     public PrescriptionService(PrescriptionLinkRepository prescriptionLinkRepository,
                                 PrescriptionItemLinkRepository prescriptionItemLinkRepository,
-                                MedicationRepository medicationRepository) {
+                                MedicationRepository medicationRepository,
+                                PrescriptionResultPublisher prescriptionResultPublisher) {
         this.prescriptionLinkRepository = prescriptionLinkRepository;
         this.prescriptionItemLinkRepository = prescriptionItemLinkRepository;
         this.medicationRepository = medicationRepository;
+        this.prescriptionResultPublisher = prescriptionResultPublisher;
     }
 
     /**
@@ -88,6 +93,40 @@ public class PrescriptionService {
                     itemEvent.dosageQty(), itemEvent.dosageFormCd(),
                     itemEvent.frequency(), itemEvent.durationDays(), itemEvent.detailInfo()));
         }
+    }
+
+    /**
+     * 조제완료 처리. 완료 즉시 결과 이벤트를 발행해서 처방코어/응급/병동에 동시 통지한다.
+     * 이미 처리된(DISPENSED/REJECTED) 건은 다시 처리할 수 없다(PHM010).
+     */
+    @Transactional
+    public void dispense(String prescriptionLinkId) {
+        PrescriptionLink link = getReceivedLinkOrThrow(prescriptionLinkId);
+        link.dispense();
+        prescriptionResultPublisher.publish(link);
+    }
+
+    /**
+     * 조제거절 처리. reason은 응급/병동 화면에 그대로 노출될 수 있어 내부 사유가 아니라
+     * 사용자에게 보여줄 수 있는 문구로 받는다.
+     */
+    @Transactional
+    public void reject(String prescriptionLinkId, String reason) {
+        PrescriptionLink link = getReceivedLinkOrThrow(prescriptionLinkId);
+        link.reject(reason);
+        prescriptionResultPublisher.publish(link);
+    }
+
+    private PrescriptionLink getReceivedLinkOrThrow(String prescriptionLinkId) {
+        PrescriptionLink link = prescriptionLinkRepository.findById(prescriptionLinkId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PRESCRIPTION_NOT_FOUND));
+
+        if (link.getStatus() != PrescriptionStatus.RECEIVED) {
+            log.warn("이미 처리된 처방전에 대한 재처리 시도. prescriptionLinkId={}, status={}",
+                    prescriptionLinkId, link.getStatus());
+            throw new BusinessException(ErrorCode.PRESCRIPTION_ALREADY_PROCESSED);
+        }
+        return link;
     }
 
     public Page<PrescriptionListResponse> search(String prescriptionId, String patientId, String physicianId,

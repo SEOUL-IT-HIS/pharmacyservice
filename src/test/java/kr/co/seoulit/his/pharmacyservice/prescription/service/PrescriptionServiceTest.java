@@ -46,6 +46,8 @@ class PrescriptionServiceTest {
     private PrescriptionItemLinkRepository prescriptionItemLinkRepository;
     @Mock
     private MedicationRepository medicationRepository;
+    @Mock
+    private kr.co.seoulit.his.pharmacyservice.prescription.publisher.PrescriptionResultPublisher prescriptionResultPublisher;
 
     @InjectMocks
     private PrescriptionService prescriptionService;
@@ -185,5 +187,42 @@ class PrescriptionServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.PRESCRIPTION_NOT_FOUND);
+    }
+
+    @Test
+    void dispense_setsStatusAndPublishes_whenReceived() {
+        PrescriptionLink link = newPrescriptionLink();
+        when(prescriptionLinkRepository.findById(link.getPrescriptionLinkId())).thenReturn(Optional.of(link));
+
+        prescriptionService.dispense(link.getPrescriptionLinkId());
+
+        assertThat(link.getStatus()).isEqualTo(kr.co.seoulit.his.pharmacyservice.prescription.entity.PrescriptionStatus.DISPENSED);
+        verify(prescriptionResultPublisher).publish(link);
+    }
+
+    @Test
+    void dispense_throwsAlreadyProcessed_whenNotReceived() {
+        PrescriptionLink link = newPrescriptionLink();
+        link.dispense();
+        when(prescriptionLinkRepository.findById(link.getPrescriptionLinkId())).thenReturn(Optional.of(link));
+
+        assertThatThrownBy(() -> prescriptionService.dispense(link.getPrescriptionLinkId()))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PRESCRIPTION_ALREADY_PROCESSED);
+
+        verify(prescriptionResultPublisher, never()).publish(any());
+    }
+
+    @Test
+    void reject_setsReasonAndPublishes_whenReceived() {
+        PrescriptionLink link = newPrescriptionLink();
+        when(prescriptionLinkRepository.findById(link.getPrescriptionLinkId())).thenReturn(Optional.of(link));
+
+        prescriptionService.reject(link.getPrescriptionLinkId(), "재고 없음");
+
+        assertThat(link.getStatus()).isEqualTo(kr.co.seoulit.his.pharmacyservice.prescription.entity.PrescriptionStatus.REJECTED);
+        assertThat(link.getRejectReason()).isEqualTo("재고 없음");
+        verify(prescriptionResultPublisher).publish(link);
     }
 }

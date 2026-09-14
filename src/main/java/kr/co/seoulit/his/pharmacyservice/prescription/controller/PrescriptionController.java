@@ -7,12 +7,14 @@ import kr.co.seoulit.his.pharmacyservice.common.ApiResponse;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionCreatedEvent;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionDetailResponse;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionListResponse;
+import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionRejectRequest;
 import kr.co.seoulit.his.pharmacyservice.prescription.service.PrescriptionService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -66,5 +68,20 @@ public class PrescriptionController {
     @GetMapping("/{prescriptionLinkId}")
     public ApiResponse<PrescriptionDetailResponse> getDetail(@PathVariable String prescriptionLinkId) {
         return ApiResponse.success(prescriptionService.getDetail(prescriptionLinkId));
+    }
+
+    @Operation(summary = "조제완료", description = "처리 후 처방코어/응급/병동에 결과 이벤트를 발행한다.")
+    @PatchMapping("/{prescriptionLinkId}/dispense")
+    public ApiResponse<Void> dispense(@PathVariable String prescriptionLinkId) {
+        prescriptionService.dispense(prescriptionLinkId);
+        return ApiResponse.success(null);
+    }
+
+    @Operation(summary = "조제거절", description = "처리 후 처방코어/응급/병동에 결과 이벤트를 발행한다.")
+    @PatchMapping("/{prescriptionLinkId}/reject")
+    public ApiResponse<Void> reject(@PathVariable String prescriptionLinkId,
+                                     @Valid @RequestBody PrescriptionRejectRequest request) {
+        prescriptionService.reject(prescriptionLinkId, request.reason());
+        return ApiResponse.success(null);
     }
 }

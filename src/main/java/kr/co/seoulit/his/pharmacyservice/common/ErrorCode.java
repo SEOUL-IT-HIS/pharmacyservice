@@ -18,6 +18,7 @@ public enum ErrorCode {
     DUPLICATE_RECEIPT_ITEM(400, "PHM007"),
     INSUFFICIENT_STOCK(400, "PHM008"),
     INVALID_DOSAGE_FORM_CODE(400, "PHM009"),
+    PRESCRIPTION_ALREADY_PROCESSED(409, "PHM010"),
     INTERNAL_ERROR(500, "서버 오류가 발생했습니다.");
 
     private final int code;

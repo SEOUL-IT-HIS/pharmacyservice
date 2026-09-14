@@ -2,6 +2,8 @@ package kr.co.seoulit.his.pharmacyservice.prescription.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import kr.co.seoulit.his.pharmacyservice.common.BaseEntity;
@@ -33,6 +35,14 @@ public class PrescriptionLink extends BaseEntity {
     @Column(name = "CREATED_AT", nullable = false)
     private LocalDateTime createdAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "STATUS", nullable = false, length = 20)
+    private PrescriptionStatus status = PrescriptionStatus.RECEIVED;
+
+    // 거절 사유. REJECTED 상태일 때만 값이 있다.
+    @Column(name = "REJECT_REASON")
+    private String rejectReason;
+
     protected PrescriptionLink() {
     }
 
@@ -44,6 +54,16 @@ public class PrescriptionLink extends BaseEntity {
         this.physicianId = physicianId;
         this.departmentId = departmentId;
         this.createdAt = createdAt;
+        this.status = PrescriptionStatus.RECEIVED;
+    }
+
+    public void dispense() {
+        this.status = PrescriptionStatus.DISPENSED;
+    }
+
+    public void reject(String reason) {
+        this.status = PrescriptionStatus.REJECTED;
+        this.rejectReason = reason;
     }
 
     @Override
@@ -73,5 +93,13 @@ public class PrescriptionLink extends BaseEntity {
 
     public LocalDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public PrescriptionStatus getStatus() {
+        return status;
+    }
+
+    public String getRejectReason() {
+        return rejectReason;
     }
 }

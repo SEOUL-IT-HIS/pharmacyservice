@@ -4,10 +4,11 @@ import kr.co.seoulit.his.pharmacyservice.common.BusinessException;
 import kr.co.seoulit.his.pharmacyservice.common.ErrorCode;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionDetailResponse;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionListResponse;
+import kr.co.seoulit.his.pharmacyservice.prescription.entity.PrescriptionStatus;
 import kr.co.seoulit.his.pharmacyservice.prescription.service.PrescriptionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure       .WebMvcTest;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -110,7 +111,7 @@ class PrescriptionControllerTest {
     void search_returns200_withList() throws Exception {
         PrescriptionListResponse response = new PrescriptionListResponse(
                 "LINK-001", "PRESCRIPTION-001", "PATIENT-001", "PHYSICIAN-001", "DEPARTMENT-001",
-                LocalDateTime.of(2026, 7, 16, 9, 0));
+                LocalDateTime.of(2026, 7, 16, 9, 0), PrescriptionStatus.RECEIVED);
         Page<PrescriptionListResponse> page = new PageImpl<>(List.of(response), PageRequest.of(0, 20), 1);
         when(prescriptionService.search(any(), any(), any(), any(), any())).thenReturn(page);
 
@@ -123,7 +124,7 @@ class PrescriptionControllerTest {
     void getDetail_returns200_withItems() throws Exception {
         PrescriptionDetailResponse response = new PrescriptionDetailResponse(
                 "LINK-001", "PRESCRIPTION-001", "PATIENT-001", "PHYSICIAN-001", "DEPARTMENT-001",
-                LocalDateTime.of(2026, 7, 16, 9, 0), List.of());
+                LocalDateTime.of(2026, 7, 16, 9, 0), PrescriptionStatus.RECEIVED, null, List.of());
         when(prescriptionService.getDetail("LINK-001")).thenReturn(response);
 
         mockMvc.perform(get("/api/pharmacy/prescriptions/LINK-001"))
