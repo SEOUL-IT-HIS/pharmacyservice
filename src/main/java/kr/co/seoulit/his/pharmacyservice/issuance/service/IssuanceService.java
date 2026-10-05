@@ -1,75 +1,75 @@
 package kr.co.seoulit.his.pharmacyservice.issuance.service;
 
-import kr.co.seoulit.his.pharmacyservice.common.BusinessException;
-import kr.co.seoulit.his.pharmacyservice.common.ErrorCode;
-import kr.co.seoulit.his.pharmacyservice.inventory.entity.MedicationStock;
-import kr.co.seoulit.his.pharmacyservice.inventory.repository.MedicationStockRepository;
+import kr.co.seoulit.his.pharmacyservice.inventory.entity.MedicationLot;
+import kr.co.seoulit.his.pharmacyservice.inventory.service.StockMovementService;
 import kr.co.seoulit.his.pharmacyservice.issuance.dto.IssuanceCreateRequest;
 import kr.co.seoulit.his.pharmacyservice.issuance.dto.IssuanceListResponse;
+import kr.co.seoulit.his.pharmacyservice.issuance.entity.MedicationIssue;
+import kr.co.seoulit.his.pharmacyservice.issuance.entity.MedicationIssueItem;
+import kr.co.seoulit.his.pharmacyservice.issuance.repository.MedicationIssueItemRepository;
+import kr.co.seoulit.his.pharmacyservice.issuance.repository.MedicationIssueRepository;
 import kr.co.seoulit.his.pharmacyservice.medication.repository.MedicationRepository;
 import kr.co.seoulit.his.pharmacyservice.receipt.entity.InventoryMovement;
 import kr.co.seoulit.his.pharmacyservice.receipt.repository.InventoryMovementRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 
 /**
  * 약품 출고(HL2-8 등록 / HL2-9 조회).
- * 학습 목적 수준의 단순화: 출고 헤더 없이 InventoryMovement(STOCK_TX_TYPE_CD='02')를 출고 이력으로 사용하고,
- * 재고는 유효기간이 빠른 로트(FEFO)부터 하나만 골라 차감한다 (여러 로트로 쪼개서 출고하는 것은 지원하지 않음).
+ * MEDICATION_ISSUE(헤더) + MEDICATION_ISSUE_ITEM(상세)에 정식으로 기록하고, 재고 차감은
+ * 유효기간이 빠른 로트(FEFO)부터 하나만 골라 처리한다(여러 로트로 쪼개는 것은 지원하지 않음).
  */
 @Service
 public class IssuanceService {
 
-    private static final String STOCK_TX_TYPE_ISSUANCE = "02";
+    /** 출고 유형 — ADM 공통코드에 아직 등록 전이라 임시로 "일반출고" 한 종류만 쓴다(학습용 단순화) */
+    private static final String ISSUE_TYPE_GENERAL = "01";
     private static final String SOURCE_FORM_TYPE_ISSUANCE = "ISSUANCE";
     /** 출고 등록 화면에 담당자 입력란이 없어 임시로 고정값을 사용한다 (인증 연동 전까지의 학습용 단순화) */
     private static final String ISSUED_BY_PLACEHOLDER = "SYSTEM";
 
-    private final MedicationStockRepository medicationStockRepository;
+    private final MedicationIssueRepository medicationIssueRepository;
+    private final MedicationIssueItemRepository medicationIssueItemRepository;
     private final InventoryMovementRepository inventoryMovementRepository;
     private final MedicationRepository medicationRepository;
+    private final StockMovementService stockMovementService;
 
-    public IssuanceService(MedicationStockRepository medicationStockRepository,
+    public IssuanceService(MedicationIssueRepository medicationIssueRepository,
+                            MedicationIssueItemRepository medicationIssueItemRepository,
                             InventoryMovementRepository inventoryMovementRepository,
-                            MedicationRepository medicationRepository) {
-        this.medicationStockRepository = medicationStockRepository;
+                            MedicationRepository medicationRepository,
+                            StockMovementService stockMovementService) {
+        this.medicationIssueRepository = medicationIssueRepository;
+        this.medicationIssueItemRepository = medicationIssueItemRepository;
         this.inventoryMovementRepository = inventoryMovementRepository;
         this.medicationRepository = medicationRepository;
+        this.stockMovementService = stockMovementService;
     }
 
     @Transactional
     public void create(IssuanceCreateRequest request) {
-        List<MedicationStock> candidates =
-                medicationStockRepository.findAvailableByMedicationIdOrderByExpirationDtAsc(request.medicationId());
+        MedicationIssue issue = medicationIssueRepository.save(
+                new MedicationIssue(ISSUED_BY_PLACEHOLDER, ISSUE_TYPE_GENERAL));
 
-        MedicationStock stock = candidates.stream()
-                .filter(s -> s.getCurrentQty().compareTo(request.quantity()) >= 0)
-                .findFirst()
-                .orElseThrow(() -> new BusinessException(ErrorCode.INSUFFICIENT_STOCK));
+        StockMovementService.Result result = stockMovementService.decreaseFefo(
+                request.medicationId(), request.quantity(), StockMovementService.STOCK_TX_TYPE_ISSUANCE,
+                issue.getMedicationIssueId(), SOURCE_FORM_TYPE_ISSUANCE, ISSUED_BY_PLACEHOLDER);
 
-        LocalDateTime movementAt = LocalDateTime.now();
-        BigDecimal beforeQty = stock.decreaseQty(request.quantity(), movementAt);
-        BigDecimal afterQty = stock.getCurrentQty();
-
-        inventoryMovementRepository.save(new InventoryMovement(
-                stock, STOCK_TX_TYPE_ISSUANCE, request.quantity(), beforeQty, afterQty,
-                UUID.randomUUID().toString(), SOURCE_FORM_TYPE_ISSUANCE, movementAt, ISSUED_BY_PLACEHOLDER));
+        medicationIssueItemRepository.save(
+                new MedicationIssueItem(issue, result.lot(), request.quantity()));
     }
 
     /** 출고 조회(HL2-9) 화면용 — 출고 이력 목록 */
     @Transactional(readOnly = true)
     public List<IssuanceListResponse> list() {
-        List<InventoryMovement> movements =
-                inventoryMovementRepository.findAllByStockTxTypeCdOrderByMovementAtDesc(STOCK_TX_TYPE_ISSUANCE);
+        List<InventoryMovement> movements = inventoryMovementRepository
+                .findAllByStockTxTypeCdOrderByMovementAtDesc(StockMovementService.STOCK_TX_TYPE_ISSUANCE);
         Map<Long, String> nameByMedicationId = loadMedicationNames(movements);
         return movements.stream()
                 .map(m -> IssuanceListResponse.from(
