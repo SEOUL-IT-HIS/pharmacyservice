@@ -39,9 +39,11 @@ public class PrescriptionLink extends BaseEntity {
     // Oracle은 "NOT NULL 컬럼을 DEFAULT 없이 추가"하는 걸 테이블에 기존 row가 있으면 막는다
     // (ORA-01758). DEFAULT 'RECEIVED'를 명시하면 기존 row에도 자동으로 채워지면서 추가되므로,
     // 이미 데이터가 쌓인 운영/개발 DB에서도 스키마 업데이트가 그대로 성공한다.
+    // NOT NULL/CHECK는 여기 쓰지 않는다 — Hibernate가 nullable=false와 enum 값으로 뒤에 직접 붙이므로,
+    // 같이 쓰면 "NOT NULL ... not null"로 중복돼 Oracle이 ORA-02258로 거부한다.
     @Enumerated(EnumType.STRING)
     @Column(name = "STATUS", nullable = false, length = 20,
-            columnDefinition = "VARCHAR2(20 CHAR) DEFAULT 'RECEIVED' NOT NULL CHECK (STATUS IN ('RECEIVED','DISPENSED','REJECTED'))")
+            columnDefinition = "VARCHAR2(20 CHAR) DEFAULT 'RECEIVED'")
     private PrescriptionStatus status = PrescriptionStatus.RECEIVED;
 
     // 거절 사유. REJECTED 상태일 때만 값이 있다.
