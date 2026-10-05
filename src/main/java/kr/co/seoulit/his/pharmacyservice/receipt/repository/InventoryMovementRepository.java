@@ -18,4 +18,7 @@ public interface InventoryMovementRepository extends JpaRepository<InventoryMove
             ORDER BY m.movementAt DESC
             """)
     List<InventoryMovement> findAllByStockTxTypeCdOrderByMovementAtDesc(@Param("stockTxTypeCd") String stockTxTypeCd);
+
+    /** 마약류(controlleddrug)가 입고/출고/폐기 처리 직후, 그 결과로 생긴 이력을 찾을 때 쓴다 */
+    List<InventoryMovement> findBySourceFormId(String sourceFormId);
 }

@@ -40,8 +40,10 @@ public class DisposalService {
         this.stockMovementService = stockMovementService;
     }
 
+    // 마약류 폐기(controlleddrug 패키지)가 이 메서드를 그대로 재사용하면서, 방금 생긴
+    // INVENTORY_MOVEMENT를 찾아 CONTROLLED_DRUG_RECORD를 남겨야 해서 헤더를 반환한다.
     @Transactional
-    public void create(DisposalCreateRequest request) {
+    public MedicationDisposal create(DisposalCreateRequest request) {
         if (request.reason().getBytes(StandardCharsets.UTF_8).length > DISPOSAL_REASON_MAX_BYTES) {
             throw new BusinessException(ErrorCode.DISPOSAL_REASON_TOO_LONG);
         }
@@ -55,5 +57,7 @@ public class DisposalService {
 
         medicationDisposalItemRepository.save(
                 new MedicationDisposalItem(disposal, result.lot(), request.quantity()));
+
+        return disposal;
     }
 }

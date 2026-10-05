@@ -52,8 +52,10 @@ public class IssuanceService {
         this.stockMovementService = stockMovementService;
     }
 
+    // 마약류 입출고(controlleddrug 패키지)가 이 메서드를 그대로 재사용하면서, 방금 생긴
+    // INVENTORY_MOVEMENT를 찾아 CONTROLLED_DRUG_RECORD를 남겨야 해서 헤더를 반환한다.
     @Transactional
-    public void create(IssuanceCreateRequest request) {
+    public MedicationIssue create(IssuanceCreateRequest request) {
         MedicationIssue issue = medicationIssueRepository.save(
                 new MedicationIssue(ISSUED_BY_PLACEHOLDER, ISSUE_TYPE_GENERAL));
 
@@ -63,6 +65,8 @@ public class IssuanceService {
 
         medicationIssueItemRepository.save(
                 new MedicationIssueItem(issue, result.lot(), request.quantity()));
+
+        return issue;
     }
 
     /** 출고 조회(HL2-9) 화면용 — 출고 이력 목록 */
