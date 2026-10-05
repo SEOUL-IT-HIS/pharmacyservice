@@ -12,6 +12,7 @@ import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionDetailResp
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionItemEvent;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionItemResponse;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionListResponse;
+import kr.co.seoulit.his.pharmacyservice.prescription.dto.ReleaseInfoResponse;
 import kr.co.seoulit.his.pharmacyservice.prescription.entity.Dispensing;
 import kr.co.seoulit.his.pharmacyservice.prescription.entity.DispensingCancel;
 import kr.co.seoulit.his.pharmacyservice.prescription.entity.DispensingItem;
@@ -24,6 +25,8 @@ import kr.co.seoulit.his.pharmacyservice.prescription.repository.DispensingItemR
 import kr.co.seoulit.his.pharmacyservice.prescription.repository.DispensingRepository;
 import kr.co.seoulit.his.pharmacyservice.prescription.repository.PrescriptionItemLinkRepository;
 import kr.co.seoulit.his.pharmacyservice.prescription.repository.PrescriptionLinkRepository;
+import kr.co.seoulit.his.pharmacyservice.release.entity.MedicationRelease;
+import kr.co.seoulit.his.pharmacyservice.release.repository.MedicationReleaseRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -33,7 +36,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @Transactional(readOnly = true)
@@ -56,6 +61,7 @@ public class PrescriptionService {
     private final DispensingItemRepository dispensingItemRepository;
     private final DispensingCancelRepository dispensingCancelRepository;
     private final StockMovementService stockMovementService;
+    private final MedicationReleaseRepository medicationReleaseRepository;
 
     public PrescriptionService(PrescriptionLinkRepository prescriptionLinkRepository,
                                 PrescriptionItemLinkRepository prescriptionItemLinkRepository,
@@ -64,7 +70,8 @@ public class PrescriptionService {
                                 DispensingRepository dispensingRepository,
                                 DispensingItemRepository dispensingItemRepository,
                                 DispensingCancelRepository dispensingCancelRepository,
-                                StockMovementService stockMovementService) {
+                                StockMovementService stockMovementService,
+                                MedicationReleaseRepository medicationReleaseRepository) {
         this.prescriptionLinkRepository = prescriptionLinkRepository;
         this.prescriptionItemLinkRepository = prescriptionItemLinkRepository;
         this.medicationRepository = medicationRepository;
@@ -73,6 +80,7 @@ public class PrescriptionService {
         this.dispensingItemRepository = dispensingItemRepository;
         this.dispensingCancelRepository = dispensingCancelRepository;
         this.stockMovementService = stockMovementService;
+        this.medicationReleaseRepository = medicationReleaseRepository;
     }
 
     /**
@@ -214,12 +222,38 @@ public class PrescriptionService {
         PrescriptionLink link = prescriptionLinkRepository.findById(prescriptionLinkId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PRESCRIPTION_NOT_FOUND));
 
+        // 조제완료(DISPENSED) 상태일 때만 활성 Dispensing이 있다. 조제취소돼 RECEIVED로 돌아갔으면
+        // 이전 Dispensing은 CANCELLED라 여기 안 잡히고, 항목별 dispensingItemId/불출 정보도 비게 된다
+        // (반납/불출은 전부 "지금 조제완료 상태인 건"에만 의미가 있으므로 이게 맞다).
+        Dispensing activeDispensing = dispensingRepository
+                .findByPrescriptionLink_PrescriptionLinkIdAndDispenseStatusCd(prescriptionLinkId, Dispensing.STATUS_DISPENSED)
+                .orElse(null);
+
+        Map<String, DispensingItem> dispensingItemByPrescriptionItemLinkId = new HashMap<>();
+        ReleaseInfoResponse release = null;
+        if (activeDispensing != null) {
+            for (DispensingItem dispensingItem : dispensingItemRepository.findByDispensing_DispensingId(activeDispensing.getDispensingId())) {
+                dispensingItemByPrescriptionItemLinkId.put(
+                        dispensingItem.getPrescriptionItemLink().getPrescriptionItemLinkId(), dispensingItem);
+            }
+            // RELEASED든 CANCELLED든 상태 무관하게 보여준다 — 취소된 적이 있으면 이 Dispensing으로는
+            // 다시 불출할 수 없다는 걸(DB 유니크 제약) 화면에서도 알 수 있어야 "불출" 버튼을 다시
+            // 눌렀다가 에러를 보는 일이 없다.
+            MedicationRelease existingRelease = medicationReleaseRepository
+                    .findByDispensing_DispensingId(activeDispensing.getDispensingId())
+                    .orElse(null);
+            if (existingRelease != null) {
+                release = ReleaseInfoResponse.from(existingRelease);
+            }
+        }
+
         List<PrescriptionItemResponse> items = prescriptionItemLinkRepository
                 .findByPrescriptionLink_PrescriptionLinkId(prescriptionLinkId)
                 .stream()
-                .map(PrescriptionItemResponse::from)
+                .map(item -> PrescriptionItemResponse.from(
+                        item, dispensingItemByPrescriptionItemLinkId.get(item.getPrescriptionItemLinkId())))
                 .toList();
 
-        return PrescriptionDetailResponse.from(link, items);
+        return PrescriptionDetailResponse.from(link, items, release);
     }
 }

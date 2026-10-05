@@ -59,6 +59,8 @@ class PrescriptionServiceTest {
     private DispensingCancelRepository dispensingCancelRepository;
     @Mock
     private kr.co.seoulit.his.pharmacyservice.inventory.service.StockMovementService stockMovementService;
+    @Mock
+    private kr.co.seoulit.his.pharmacyservice.release.repository.MedicationReleaseRepository medicationReleaseRepository;
 
     @InjectMocks
     private PrescriptionService prescriptionService;
@@ -183,11 +185,16 @@ class PrescriptionServiceTest {
         when(prescriptionLinkRepository.findById(link.getPrescriptionLinkId())).thenReturn(Optional.of(link));
         when(prescriptionItemLinkRepository.findByPrescriptionLink_PrescriptionLinkId(link.getPrescriptionLinkId()))
                 .thenReturn(List.of());
+        when(dispensingRepository.findByPrescriptionLink_PrescriptionLinkIdAndDispenseStatusCd(
+                link.getPrescriptionLinkId(),
+                kr.co.seoulit.his.pharmacyservice.prescription.entity.Dispensing.STATUS_DISPENSED))
+                .thenReturn(Optional.empty());
 
         PrescriptionDetailResponse response = prescriptionService.getDetail(link.getPrescriptionLinkId());
 
         assertThat(response.prescriptionLinkId()).isEqualTo(link.getPrescriptionLinkId());
         assertThat(response.items()).isEmpty();
+        assertThat(response.release()).isNull();
     }
 
     @Test
