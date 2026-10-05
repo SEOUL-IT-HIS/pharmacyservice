@@ -15,6 +15,7 @@ import kr.co.seoulit.his.pharmacyservice.release.repository.MedicationReleaseRep
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 
@@ -57,7 +58,15 @@ public class MedicationReturnService {
         DispensingItem dispensingItem = dispensingItemRepository.findById(request.dispensingItemId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.DISPENSING_NOT_FOUND));
 
-        if (request.returnQty().compareTo(dispensingItem.getDispensedQty()) > 0) {
+        // 한 조제상세를 여러 번에 나눠 반납할 수 있어 이번 요청 수량만 보면 안 되고,
+        // 이전에 이미 반납된 수량까지 합쳐서 조제수량을 넘는지 확인해야 한다(안 그러면
+        // 같은 조제상세를 반복 반납해서 재고가 중복으로 복구될 수 있다).
+        BigDecimal alreadyReturned = medicationReturnItemRepository
+                .findByDispensingItem_DispensingItemId(request.dispensingItemId())
+                .stream()
+                .map(MedicationReturnItem::getReturnQty)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (alreadyReturned.add(request.returnQty()).compareTo(dispensingItem.getDispensedQty()) > 0) {
             throw new BusinessException(ErrorCode.RETURN_QTY_EXCEEDS_DISPENSED);
         }
 
