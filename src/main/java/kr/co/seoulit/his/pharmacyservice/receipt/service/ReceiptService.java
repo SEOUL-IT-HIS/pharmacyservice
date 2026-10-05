@@ -113,6 +113,12 @@ public class ReceiptService {
 
     private ReceiptItemResult receiveItem(MedicationReceipt receipt, ReceiptItemRequest itemRequest,
                                            String storageLocationId, String receivedById, LocalDateTime movementAt) {
+        // 약품 마스터에 없는 medicationId로 입고하면 이름 없는 유령 재고 로트가 생기므로 먼저 막는다.
+        Long medicationId = parseMedicationId(itemRequest.medicationId());
+        if (medicationId == null || !medicationRepository.existsById(medicationId)) {
+            throw new BusinessException(ErrorCode.MEDICATION_NOT_FOUND);
+        }
+
         MedicationLot lot = medicationLotRepository
                 .findByMedicationIdAndLotNo(itemRequest.medicationId(), itemRequest.lotNo())
                 .orElseGet(() -> medicationLotRepository.save(new MedicationLot(
