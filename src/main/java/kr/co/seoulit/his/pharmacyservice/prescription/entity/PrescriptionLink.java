@@ -73,6 +73,11 @@ public class PrescriptionLink extends BaseEntity {
         this.rejectReason = reason;
     }
 
+    /** 조제취소 — 다시 RECEIVED로 되돌려 재처리를 받을 수 있게 한다. */
+    public void backToReceived() {
+        this.status = PrescriptionStatus.RECEIVED;
+    }
+
     @Override
     public String getId() {
         return prescriptionLinkId;

@@ -7,6 +7,7 @@ import kr.co.seoulit.his.pharmacyservice.common.ApiResponse;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionCreatedEvent;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionDetailResponse;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionListResponse;
+import kr.co.seoulit.his.pharmacyservice.prescription.dto.DispensingCancelRequest;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionRejectRequest;
 import kr.co.seoulit.his.pharmacyservice.prescription.service.PrescriptionService;
 import org.springframework.data.domain.Page;
@@ -82,6 +83,14 @@ public class PrescriptionController {
     public ApiResponse<Void> reject(@PathVariable String prescriptionLinkId,
                                      @Valid @RequestBody PrescriptionRejectRequest request) {
         prescriptionService.reject(prescriptionLinkId, request.reason());
+        return ApiResponse.success(null);
+    }
+
+    @Operation(summary = "조제취소", description = "조제완료 때 빠져나간 재고를 복구하고 처방전을 RECEIVED로 되돌린다.")
+    @PatchMapping("/{prescriptionLinkId}/cancel-dispense")
+    public ApiResponse<Void> cancelDispense(@PathVariable String prescriptionLinkId,
+                                             @Valid @RequestBody DispensingCancelRequest request) {
+        prescriptionService.cancelDispense(prescriptionLinkId, request.reason());
         return ApiResponse.success(null);
     }
 }

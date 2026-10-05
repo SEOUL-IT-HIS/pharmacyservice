@@ -2,6 +2,8 @@ package kr.co.seoulit.his.pharmacyservice.prescription.service;
 
 import kr.co.seoulit.his.pharmacyservice.common.BusinessException;
 import kr.co.seoulit.his.pharmacyservice.common.ErrorCode;
+import kr.co.seoulit.his.pharmacyservice.inventory.entity.MedicationLot;
+import kr.co.seoulit.his.pharmacyservice.inventory.service.StockMovementService;
 import kr.co.seoulit.his.pharmacyservice.medication.entity.Medication;
 import kr.co.seoulit.his.pharmacyservice.medication.repository.MedicationRepository;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.DosageFormCode;
@@ -10,10 +12,16 @@ import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionDetailResp
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionItemEvent;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionItemResponse;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionListResponse;
+import kr.co.seoulit.his.pharmacyservice.prescription.entity.Dispensing;
+import kr.co.seoulit.his.pharmacyservice.prescription.entity.DispensingCancel;
+import kr.co.seoulit.his.pharmacyservice.prescription.entity.DispensingItem;
 import kr.co.seoulit.his.pharmacyservice.prescription.entity.PrescriptionItemLink;
 import kr.co.seoulit.his.pharmacyservice.prescription.entity.PrescriptionLink;
 import kr.co.seoulit.his.pharmacyservice.prescription.entity.PrescriptionStatus;
 import kr.co.seoulit.his.pharmacyservice.prescription.publisher.PrescriptionResultPublisher;
+import kr.co.seoulit.his.pharmacyservice.prescription.repository.DispensingCancelRepository;
+import kr.co.seoulit.his.pharmacyservice.prescription.repository.DispensingItemRepository;
+import kr.co.seoulit.his.pharmacyservice.prescription.repository.DispensingRepository;
 import kr.co.seoulit.his.pharmacyservice.prescription.repository.PrescriptionItemLinkRepository;
 import kr.co.seoulit.his.pharmacyservice.prescription.repository.PrescriptionLinkRepository;
 import org.slf4j.Logger;
@@ -23,6 +31,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -31,19 +41,38 @@ public class PrescriptionService {
 
     private static final Logger log = LoggerFactory.getLogger(PrescriptionService.class);
 
+    private static final String SOURCE_FORM_TYPE_DISPENSING = "DISPENSING";
+    private static final String SOURCE_FORM_TYPE_DISPENSING_CANCEL = "DISPENSING_CANCEL";
+    /** 조제완료/조제취소 처리자 입력란이 아직 화면에 없어 임시로 고정값을 사용한다 (출고/폐기와 동일한 단순화) */
+    private static final String DISPENSED_BY_PLACEHOLDER = "SYSTEM";
+    /** CANCEL_REASON_CD 컬럼이 20바이트라, 그 안에 들어가는 사유만 저장하고 넘으면 400으로 막는다 */
+    private static final int CANCEL_REASON_MAX_BYTES = 20;
+
     private final PrescriptionLinkRepository prescriptionLinkRepository;
     private final PrescriptionItemLinkRepository prescriptionItemLinkRepository;
     private final MedicationRepository medicationRepository;
     private final PrescriptionResultPublisher prescriptionResultPublisher;
+    private final DispensingRepository dispensingRepository;
+    private final DispensingItemRepository dispensingItemRepository;
+    private final DispensingCancelRepository dispensingCancelRepository;
+    private final StockMovementService stockMovementService;
 
     public PrescriptionService(PrescriptionLinkRepository prescriptionLinkRepository,
                                 PrescriptionItemLinkRepository prescriptionItemLinkRepository,
                                 MedicationRepository medicationRepository,
-                                PrescriptionResultPublisher prescriptionResultPublisher) {
+                                PrescriptionResultPublisher prescriptionResultPublisher,
+                                DispensingRepository dispensingRepository,
+                                DispensingItemRepository dispensingItemRepository,
+                                DispensingCancelRepository dispensingCancelRepository,
+                                StockMovementService stockMovementService) {
         this.prescriptionLinkRepository = prescriptionLinkRepository;
         this.prescriptionItemLinkRepository = prescriptionItemLinkRepository;
         this.medicationRepository = medicationRepository;
         this.prescriptionResultPublisher = prescriptionResultPublisher;
+        this.dispensingRepository = dispensingRepository;
+        this.dispensingItemRepository = dispensingItemRepository;
+        this.dispensingCancelRepository = dispensingCancelRepository;
+        this.stockMovementService = stockMovementService;
     }
 
     /**
@@ -102,8 +131,53 @@ public class PrescriptionService {
     @Transactional
     public void dispense(String prescriptionLinkId) {
         PrescriptionLink link = getReceivedLinkOrThrow(prescriptionLinkId);
+
+        Dispensing dispensing = dispensingRepository.save(new Dispensing(link, LocalDate.now()));
+
+        List<PrescriptionItemLink> items = prescriptionItemLinkRepository
+                .findByPrescriptionLink_PrescriptionLinkId(prescriptionLinkId);
+        for (PrescriptionItemLink item : items) {
+            // 조제완료 = 처방 항목만큼 약국 재고에서 실제로 빠져나가는 시점. 재고가 모자라면 조제 자체를 완료할 수 없다(PHM008).
+            StockMovementService.Result result = stockMovementService.decreaseFefo(
+                    item.getMedicationId(), item.getDosageQty(), StockMovementService.STOCK_TX_TYPE_DISPENSING,
+                    dispensing.getDispensingId(), SOURCE_FORM_TYPE_DISPENSING, DISPENSED_BY_PLACEHOLDER);
+            dispensingItemRepository.save(new DispensingItem(
+                    dispensing, item, result.lot(), item.getDosageQty(), item.getDosageQty()));
+        }
+
         link.dispense();
         prescriptionResultPublisher.publish(link);
+    }
+
+    /**
+     * 조제취소. 조제완료 때 실제로 빠져나간 재고를 그 당시 사용한 로트 그대로 복구하고,
+     * 처방전 상태를 RECEIVED로 되돌려 다시 조제완료/거절을 받을 수 있게 한다.
+     * 결과 이벤트는 재발행하지 않는다 - 조제완료 통지를 받은 쪽(처방코어/응급/병동)에 취소까지
+     * 알리는 것은 이번 범위 밖이라, 필요해지면 별도 이벤트 타입으로 설계해야 한다.
+     */
+    @Transactional
+    public void cancelDispense(String prescriptionLinkId, String reason) {
+        if (reason.getBytes(StandardCharsets.UTF_8).length > CANCEL_REASON_MAX_BYTES) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+
+        PrescriptionLink link = prescriptionLinkRepository.findById(prescriptionLinkId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PRESCRIPTION_NOT_FOUND));
+
+        Dispensing dispensing = dispensingRepository
+                .findByPrescriptionLink_PrescriptionLinkIdAndDispenseStatusCd(prescriptionLinkId, Dispensing.STATUS_DISPENSED)
+                .orElseThrow(() -> new BusinessException(ErrorCode.DISPENSING_NOT_FOUND));
+
+        List<DispensingItem> items = dispensingItemRepository.findByDispensing_DispensingId(dispensing.getDispensingId());
+        for (DispensingItem item : items) {
+            stockMovementService.increaseLot(
+                    item.getMedicationLot(), item.getDispensedQty(), StockMovementService.STOCK_TX_TYPE_DISPENSING_CANCEL,
+                    dispensing.getDispensingId(), SOURCE_FORM_TYPE_DISPENSING_CANCEL, DISPENSED_BY_PLACEHOLDER);
+        }
+
+        dispensingCancelRepository.save(new DispensingCancel(dispensing, LocalDate.now(), reason, DISPENSED_BY_PLACEHOLDER));
+        dispensing.cancel();
+        link.backToReceived();
     }
 
     /**
