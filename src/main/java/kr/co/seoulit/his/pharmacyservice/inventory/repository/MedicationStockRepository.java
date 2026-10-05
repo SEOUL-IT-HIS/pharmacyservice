@@ -37,6 +37,9 @@ public interface MedicationStockRepository extends JpaRepository<MedicationStock
 
     Optional<MedicationStock> findByMedicationLot_MedicationLotIdAndStorageLocationId(String medicationLotId, String storageLocationId);
 
+    /** 로트만 알고 보관위치는 모르는 경우(조제취소/반납 등)에 그 로트의 재고를 찾는다 */
+    Optional<MedicationStock> findFirstByMedicationLot_MedicationLotIdOrderByStorageLocationIdAsc(String medicationLotId);
+
     /** 출고(HL2-8)용 — 재고가 남아있는 로트를 유효기간이 빠른 순(FEFO)으로 조회 */
     @Query("""
             SELECT s FROM MedicationStock s
