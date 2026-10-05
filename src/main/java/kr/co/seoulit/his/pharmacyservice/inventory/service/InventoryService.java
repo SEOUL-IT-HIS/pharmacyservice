@@ -43,6 +43,11 @@ public class InventoryService {
      */
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> medicationsStock(int threshold) {
+        // 음수 기준값은 의미가 없으므로 프로시저까지 보내지 않고 400으로 막는다.
+        if (threshold < 0) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+
         Map<String, Object> params = new HashMap<>();
         params.put("input", threshold);
 
