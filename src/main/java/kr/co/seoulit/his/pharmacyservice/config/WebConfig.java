@@ -21,7 +21,7 @@ public class WebConfig implements WebMvcConfigurer {
         // 전체 API 경로 통일: /api/pharmacy/** (관리자용 포함)
         registry.addMapping("/api/pharmacy/**")
                 .allowedOriginPatterns(origins)
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true);
     }
