@@ -53,12 +53,22 @@ public class PrescriptionResultPublisher {
                 SOURCE,
                 data);
 
-        kafkaTemplate.send(topic, link.getPrescriptionId(), envelope)
-                .whenComplete((result, ex) -> {
-                    if (ex != null) {
-                        log.error("조제결과 이벤트 발행 실패. prescriptionId={}, status={}",
-                                link.getPrescriptionId(), link.getStatus(), ex);
-                    }
-                });
+        // kafkaTemplate.send()는 비동기 실패를 whenComplete로 알려주지만, 브로커에 메타데이터를
+        // 아예 못 가져오는 경우(브로커 다운 등)는 send() 호출 자체가 동기적으로 KafkaException을
+        // 던진다. 주석에 적은 대로 "발행 실패가 조제완료/거절 처리 자체를 막으면 안 된다"는
+        // 의도를 지키려면 이 동기 예외도 여기서 잡아야 한다 — 안 잡으면 트랜잭션이 전부
+        // 롤백되어 DB에는 아무것도 안 남고 500만 내려간다.
+        try {
+            kafkaTemplate.send(topic, link.getPrescriptionId(), envelope)
+                    .whenComplete((result, ex) -> {
+                        if (ex != null) {
+                            log.error("조제결과 이벤트 발행 실패. prescriptionId={}, status={}",
+                                    link.getPrescriptionId(), link.getStatus(), ex);
+                        }
+                    });
+        } catch (Exception ex) {
+            log.error("조제결과 이벤트 발행 실패(동기). prescriptionId={}, status={}",
+                    link.getPrescriptionId(), link.getStatus(), ex);
+        }
     }
 }
