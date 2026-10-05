@@ -4,7 +4,6 @@ import kr.co.seoulit.his.pharmacyservice.common.BusinessException;
 import kr.co.seoulit.his.pharmacyservice.common.ErrorCode;
 import kr.co.seoulit.his.pharmacyservice.inventory.dto.InventoryResponse;
 import kr.co.seoulit.his.pharmacyservice.inventory.entity.MedicationStock;
-import kr.co.seoulit.his.pharmacyservice.inventory.mapper.MedicationsStock;
 import kr.co.seoulit.his.pharmacyservice.inventory.repository.MedicationStockRepository;
 import kr.co.seoulit.his.pharmacyservice.medication.entity.Medication;
 import kr.co.seoulit.his.pharmacyservice.medication.repository.MedicationRepository;
@@ -13,6 +12,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
@@ -27,34 +27,29 @@ public class InventoryService {
 
     private final MedicationStockRepository medicationStockRepository;
     private final MedicationRepository medicationRepository;
-    private final MedicationsStock medicationsStock;
 
     public InventoryService(MedicationStockRepository medicationStockRepository,
-                             MedicationRepository medicationRepository,
-                             MedicationsStock medicationsStock) {
+                             MedicationRepository medicationRepository) {
         this.medicationStockRepository = medicationStockRepository;
         this.medicationRepository = medicationRepository;
-        this.medicationsStock = medicationsStock;
     }
 
     /**
-     * 수업 과제: PL/SQL 프로시저(PROC_PHARMACY_2, SYS_REFCURSOR) 호출.
-     * threshold 이하인 약품의 이름+수량 목록을 그대로 반환한다.
+     * 재고부족 목록 — 현재 수량이 threshold 이하인 재고를 수량이 적은 순으로 반환한다.
+     * (예전엔 PL/SQL 프로시저 PROC_PHARMACY_2를 MyBatis로 호출했지만 JPA 쿼리로 바꿨다.)
      */
-    @SuppressWarnings("unchecked")
-    public List<Map<String, Object>> medicationsStock(int threshold) {
-        // 음수 기준값은 의미가 없으므로 프로시저까지 보내지 않고 400으로 막는다.
+    public List<InventoryResponse> findLowStock(int threshold) {
+        // 음수 기준값은 의미가 없으므로 400으로 막는다.
         if (threshold < 0) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
 
-        Map<String, Object> params = new HashMap<>();
-        params.put("input", threshold);
-
-        medicationsStock.medicationsStock(params);
-
-        Object stockList = params.get("stockList");
-        return stockList == null ? List.of() : (List<Map<String, Object>>) stockList;
+        List<MedicationStock> stocks = medicationStockRepository.findLowStock(BigDecimal.valueOf(threshold));
+        Map<Long, String> nameById = loadMedicationNames(stocks);
+        return stocks.stream()
+                .map(stock -> InventoryResponse.from(
+                        stock, nameById.get(parseMedicationId(stock.getMedicationLot().getMedicationId()))))
+                .toList();
     }
 
     public Page<InventoryResponse> search(String medicationId, String lotNo, String storageLocationId,

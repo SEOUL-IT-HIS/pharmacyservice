@@ -26,8 +26,6 @@ dependencies {
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.0'
     implementation 'org.springframework.boot:spring-boot-starter-kafka'
     implementation 'org.springframework.kafka:spring-kafka'
-    // 수업 과제: PL/SQL 프로시저(PROC_PHARMACY) 호출용. 기존 JPA와 별개로 동작한다.
-    implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:4.1.0'
     runtimeOnly 'com.oracle.database.jdbc:ojdbc11'
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'

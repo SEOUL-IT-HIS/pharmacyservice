@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -44,4 +45,13 @@ public interface MedicationStockRepository extends JpaRepository<MedicationStock
             ORDER BY l.expirationDt ASC
             """)
     List<MedicationStock> findAvailableByMedicationIdOrderByExpirationDtAsc(@Param("medicationId") String medicationId);
+
+    /** 재고부족 목록 — 현재 수량이 기준값 이하인 재고를 수량이 적은 순으로 조회 */
+    @Query("""
+            SELECT s FROM MedicationStock s
+            JOIN FETCH s.medicationLot l
+            WHERE s.currentQty <= :threshold
+            ORDER BY s.currentQty ASC
+            """)
+    List<MedicationStock> findLowStock(@Param("threshold") BigDecimal threshold);
 }

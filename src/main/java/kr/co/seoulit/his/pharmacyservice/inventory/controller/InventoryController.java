@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/pharmacy/inventories")
@@ -49,11 +48,11 @@ public class InventoryController {
     }
 
     /**
-     * 수업 과제: PL/SQL 프로시저(PROC_PHARMACY_2, SYS_REFCURSOR) 호출 결과 확인용.
+     * 재고부족 목록 — 현재 수량이 threshold 이하인 재고.
      * 예: GET /api/pharmacy/inventories/low-stock-list?threshold=100
      */
     @GetMapping("/low-stock-list")
-    public ApiResponse<List<Map<String, Object>>> medicationsStock(@RequestParam int threshold) {
-        return ApiResponse.success(inventoryService.medicationsStock(threshold));
+    public ApiResponse<List<InventoryResponse>> findLowStock(@RequestParam int threshold) {
+        return ApiResponse.success(inventoryService.findLowStock(threshold));
     }
 }
