@@ -17,7 +17,8 @@ import java.util.UUID;
 @Table(name = "CONTROLLED_DRUG_WITNESS")
 public class ControlledDrugWitness extends BaseEntity {
 
-    public static final String ROLE_WITNESS = "WITNESS";
+    // ADM 공통코드 PHM_WITNESS_ROLE로 등록돼 있다(01=입회자, 타 MSA와 동일하게 숫자코드로 통일).
+    public static final String ROLE_WITNESS = "01";
 
     @Id
     @Column(name = "CONTROLLED_DRUG_WITNESS_ID", length = 36)
