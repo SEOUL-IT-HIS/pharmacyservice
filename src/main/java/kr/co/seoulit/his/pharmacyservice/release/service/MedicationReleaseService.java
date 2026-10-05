@@ -58,6 +58,13 @@ public class MedicationReleaseService {
                         request.prescriptionLinkId(), Dispensing.STATUS_DISPENSED)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DISPENSING_NOT_FOUND));
 
+        // DB 유니크 제약(DISPENSING_ID) 때문에 한 Dispensing은 평생 한 번만 불출 레코드를 가질 수
+        // 있다 — 취소된 적이 있어도 그 Dispensing으로는 다시 불출을 만들 수 없다(새로 조제완료
+        // 해야 재시도 가능).
+        if (medicationReleaseRepository.existsByDispensing_DispensingId(dispensing.getDispensingId())) {
+            throw new BusinessException(ErrorCode.RELEASE_ALREADY_EXISTS);
+        }
+
         return medicationReleaseRepository.save(
                 new MedicationRelease(dispensing, LocalDateTime.now(), request.recipientTypeCd()));
     }

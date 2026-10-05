@@ -57,6 +57,12 @@ public class ReturnedMedicationDisposalService {
         MedicationReturnItem returnItem = medicationReturnItemRepository.findById(medicationReturnItemId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEDICATION_RETURN_ITEM_NOT_FOUND));
 
+        // DB 유니크 제약(MEDICATION_RETURN_ITEM_ID) 때문에 반납 상세 하나당 반납약품폐기는
+        // 딱 한 번만 가능하다(나눠서 여러 번 폐기하는 건 지원하지 않음 — 전량/일부 상관없이 1회).
+        if (returnedMedicationDisposalRepository.existsByMedicationReturnItem_MedicationReturnItemId(medicationReturnItemId)) {
+            throw new BusinessException(ErrorCode.RETURNED_DISPOSAL_ALREADY_EXISTS);
+        }
+
         BigDecimal alreadyDisposed = returnItem.getDisposalQty();
         BigDecimal newTotal = alreadyDisposed.add(request.disposalQty());
         if (newTotal.compareTo(returnItem.getReturnQty()) > 0) {
