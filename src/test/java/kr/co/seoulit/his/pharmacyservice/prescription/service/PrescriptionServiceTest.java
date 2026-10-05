@@ -10,6 +10,9 @@ import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionItemEvent;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionListResponse;
 import kr.co.seoulit.his.pharmacyservice.prescription.entity.PrescriptionItemLink;
 import kr.co.seoulit.his.pharmacyservice.prescription.entity.PrescriptionLink;
+import kr.co.seoulit.his.pharmacyservice.prescription.repository.DispensingCancelRepository;
+import kr.co.seoulit.his.pharmacyservice.prescription.repository.DispensingItemRepository;
+import kr.co.seoulit.his.pharmacyservice.prescription.repository.DispensingRepository;
 import kr.co.seoulit.his.pharmacyservice.prescription.repository.PrescriptionItemLinkRepository;
 import kr.co.seoulit.his.pharmacyservice.prescription.repository.PrescriptionLinkRepository;
 import org.junit.jupiter.api.Test;
@@ -48,6 +51,14 @@ class PrescriptionServiceTest {
     private MedicationRepository medicationRepository;
     @Mock
     private kr.co.seoulit.his.pharmacyservice.prescription.publisher.PrescriptionResultPublisher prescriptionResultPublisher;
+    @Mock
+    private DispensingRepository dispensingRepository;
+    @Mock
+    private DispensingItemRepository dispensingItemRepository;
+    @Mock
+    private DispensingCancelRepository dispensingCancelRepository;
+    @Mock
+    private kr.co.seoulit.his.pharmacyservice.inventory.service.StockMovementService stockMovementService;
 
     @InjectMocks
     private PrescriptionService prescriptionService;
@@ -193,6 +204,12 @@ class PrescriptionServiceTest {
     void dispense_setsStatusAndPublishes_whenReceived() {
         PrescriptionLink link = newPrescriptionLink();
         when(prescriptionLinkRepository.findById(link.getPrescriptionLinkId())).thenReturn(Optional.of(link));
+        when(dispensingRepository.save(any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        // 이 처방은 조제항목이 없는 상태로 테스트하므로(= save()를 거치지 않은 newPrescriptionLink()),
+        // 재고 차감 루프는 비어서 그냥 지나간다.
+        when(prescriptionItemLinkRepository.findByPrescriptionLink_PrescriptionLinkId(link.getPrescriptionLinkId()))
+                .thenReturn(List.of());
 
         prescriptionService.dispense(link.getPrescriptionLinkId());
 
