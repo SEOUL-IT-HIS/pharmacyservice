@@ -34,11 +34,14 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @Transactional(readOnly = true)
@@ -52,6 +55,10 @@ public class PrescriptionService {
     private static final String DISPENSED_BY_PLACEHOLDER = "SYSTEM";
     /** CANCEL_REASON_CD 컬럼이 20바이트라, 그 안에 들어가는 사유만 저장하고 넘으면 400으로 막는다 */
     private static final int CANCEL_REASON_MAX_BYTES = 20;
+    /** frequency/durationDays(자유 텍스트)에서 맨 앞 숫자만 뽑아낸다. 예: "3회"->3, "1일 3회"처럼
+     *  두 숫자가 섞인 문자열은 앞쪽 숫자를 잘못 집을 수 있어 그런 경우는 아예 못 뽑은 것으로 친다
+     *  (아래 parseLeadingCount 참고). */
+    private static final Pattern FIRST_NUMBER = Pattern.compile("^\\D*(\\d+)\\D*$");
 
     private final PrescriptionLinkRepository prescriptionLinkRepository;
     private final PrescriptionItemLinkRepository prescriptionItemLinkRepository;
@@ -145,12 +152,35 @@ public class PrescriptionService {
         List<PrescriptionItemLink> items = prescriptionItemLinkRepository
                 .findByPrescriptionLink_PrescriptionLinkId(prescriptionLinkId);
         for (PrescriptionItemLink item : items) {
-            // 조제완료 = 처방 항목만큼 약국 재고에서 실제로 빠져나가는 시점. 재고가 모자라면 조제 자체를 완료할 수 없다(PHM008).
+            // 조제완료 = 처방 항목만큼 약국 재고에서 실제로 빠져나가는 시점. dosageQty는 "1회 투여량"이라
+            // 그대로 차감하면 안 되고, frequency(1일 투여횟수) x durationDays(투약일수)를 곱한 총
+            // 조제량을 차감해야 한다. 이전엔 이 곱셈이 빠져서 1회분만 차감되고 있었다(알약은 소량이라
+            // 티가 안 났지만 수액/주사로 가면 오차가 커짐 — 2026-10-06 발견).
+            //
+            // frequency/durationDays는 외래가 자유 텍스트로 보내는 필드라("1일 3회"처럼 숫자+단위가
+            // 섞여 올 수 있음) 신뢰도 있게 통째로 파싱할 수 없다. 한 문자열에 숫자가 정확히 하나만
+            // 있을 때만(예: "3", "3회", "1일 3회"는 숫자가 둘이라 제외) 그 숫자를 쓰고, 그 외엔 1로
+            // 본다(= 그 구간은 곱하지 않음, 기존처럼 1회분만 차감하는 것과 동일한 보수적 동작).
+            // 즉 "1"처럼 흔한 단일 숫자 포맷에서는 정확히 계산되고, 애매한 복합 문자열에서는 예전
+            // 동작으로 안전하게 폴백된다.
+            int timesPerDay = parseLeadingCount(item.getFrequency());
+            int days = parseLeadingCount(item.getDurationDays());
+            BigDecimal totalQty = item.getDosageQty()
+                    .multiply(BigDecimal.valueOf(timesPerDay))
+                    .multiply(BigDecimal.valueOf(days));
+            // frequency/durationDays 둘 중 하나라도 값은 있는데 숫자 하나로 못 읽어서 1로 폴백된
+            // 경우는 실제로 그 구간만큼 덜 차감되고 있다는 뜻이라 추적할 수 있게 로그를 남긴다.
+            if (isAmbiguousCount(item.getFrequency()) || isAmbiguousCount(item.getDurationDays())) {
+                log.warn("frequency/durationDays를 숫자로 못 읽어서 그 구간은 1로 계산함(과소 차감 위험). "
+                                + "prescriptionItemLinkId={}, frequency={}, durationDays={}",
+                        item.getPrescriptionItemLinkId(), item.getFrequency(), item.getDurationDays());
+            }
+
             StockMovementService.Result result = stockMovementService.decreaseFefo(
-                    item.getMedicationId(), item.getDosageQty(), StockMovementService.STOCK_TX_TYPE_DISPENSING,
+                    item.getMedicationId(), totalQty, StockMovementService.STOCK_TX_TYPE_DISPENSING,
                     dispensing.getDispensingId(), SOURCE_FORM_TYPE_DISPENSING, DISPENSED_BY_PLACEHOLDER);
             dispensingItemRepository.save(new DispensingItem(
-                    dispensing, item, result.lot(), item.getDosageQty(), item.getDosageQty()));
+                    dispensing, item, result.lot(), totalQty, totalQty));
         }
 
         link.dispense();
@@ -209,6 +239,32 @@ public class PrescriptionService {
             throw new BusinessException(ErrorCode.PRESCRIPTION_ALREADY_PROCESSED);
         }
         return link;
+    }
+
+    /**
+     * frequency/durationDays(자유 텍스트)에서 숫자를 뽑는다. 문자열 전체에 숫자가 정확히
+     * 한 덩어리만 있을 때만(앞뒤로 비숫자 문자는 몇 개든 허용 — "3", "3회", "1일" 전부 허용)
+     * 그 값을 쓰고, 그 외(숫자가 없거나 둘 이상 섞인 경우)엔 1을 반환한다 — 곱셈에서 그 구간을
+     * 사실상 빼는 것과 같아, 못 읽은 값을 멋대로 추측하는 것보다 안전하다.
+     */
+    private static int parseLeadingCount(String text) {
+        if (text == null) {
+            return 1;
+        }
+        Matcher matcher = FIRST_NUMBER.matcher(text.trim());
+        if (!matcher.matches()) {
+            return 1;
+        }
+        try {
+            return Integer.parseInt(matcher.group(1));
+        } catch (NumberFormatException e) {
+            return 1;
+        }
+    }
+
+    /** 값은 비어있지 않은데(= 뭔가 보내긴 했는데) FIRST_NUMBER 패턴에 안 맞아 1로 폴백되는 경우. */
+    private static boolean isAmbiguousCount(String text) {
+        return text != null && !text.isBlank() && !FIRST_NUMBER.matcher(text.trim()).matches();
     }
 
     public Page<PrescriptionListResponse> search(String prescriptionId, String patientId, String physicianId,
