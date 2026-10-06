@@ -2,6 +2,7 @@ package kr.co.seoulit.his.pharmacyservice.release.service;
 
 import kr.co.seoulit.his.pharmacyservice.common.BusinessException;
 import kr.co.seoulit.his.pharmacyservice.common.ErrorCode;
+import kr.co.seoulit.his.pharmacyservice.medicationreturn.repository.MedicationReturnRepository;
 import kr.co.seoulit.his.pharmacyservice.prescription.entity.Dispensing;
 import kr.co.seoulit.his.pharmacyservice.prescription.repository.DispensingRepository;
 import kr.co.seoulit.his.pharmacyservice.prescription.repository.PrescriptionLinkRepository;
@@ -25,29 +26,46 @@ import java.time.LocalDateTime;
 @Service
 public class MedicationReleaseService {
 
-    /** 불출/불출취소 처리자 입력란이 아직 화면에 없어 임시로 고정값을 사용한다 */
-    private static final String RELEASED_BY_PLACEHOLDER = "SYSTEM";
-    private static final int CANCEL_REASON_MAX_BYTES = 20;
+    private static final int CANCEL_REASON_MAX_BYTES = 200;
 
     private final PrescriptionLinkRepository prescriptionLinkRepository;
     private final DispensingRepository dispensingRepository;
     private final MedicationReleaseRepository medicationReleaseRepository;
     private final ReleaseCancelRepository releaseCancelRepository;
+    private final MedicationReturnRepository medicationReturnRepository;
 
     public MedicationReleaseService(PrescriptionLinkRepository prescriptionLinkRepository,
                                      DispensingRepository dispensingRepository,
                                      MedicationReleaseRepository medicationReleaseRepository,
-                                     ReleaseCancelRepository releaseCancelRepository) {
+                                     ReleaseCancelRepository releaseCancelRepository,
+                                     MedicationReturnRepository medicationReturnRepository) {
         this.prescriptionLinkRepository = prescriptionLinkRepository;
         this.dispensingRepository = dispensingRepository;
         this.medicationReleaseRepository = medicationReleaseRepository;
         this.releaseCancelRepository = releaseCancelRepository;
+        this.medicationReturnRepository = medicationReturnRepository;
     }
 
     @Transactional
     public MedicationRelease create(MedicationReleaseCreateRequest request) {
         if (!RecipientType.isValid(request.recipientTypeCd())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+
+        // 받은 사람 정보 — 병동이면 받은 병동 직원, 보호자면 보호자 이름이 있어야 누구에게 줬는지 남는다.
+        // 환자 본인이면 둘 다 필요 없으므로 값이 와도 저장하지 않는다.
+        String receiverId = null;
+        String guardianName = null;
+        if (RecipientType.WARD.getCode().equals(request.recipientTypeCd())) {
+            if (request.receiverId() == null || request.receiverId().isBlank()) {
+                throw new BusinessException(ErrorCode.RELEASE_RECIPIENT_REQUIRED);
+            }
+            receiverId = request.receiverId().trim();
+        } else if (RecipientType.GUARDIAN.getCode().equals(request.recipientTypeCd())) {
+            if (request.guardianName() == null || request.guardianName().isBlank()) {
+                throw new BusinessException(ErrorCode.RELEASE_RECIPIENT_REQUIRED);
+            }
+            guardianName = request.guardianName().trim();
         }
 
         prescriptionLinkRepository.findById(request.prescriptionLinkId())
@@ -66,11 +84,12 @@ public class MedicationReleaseService {
         }
 
         return medicationReleaseRepository.save(
-                new MedicationRelease(dispensing, LocalDateTime.now(), request.recipientTypeCd()));
+                new MedicationRelease(dispensing, LocalDateTime.now(), request.recipientTypeCd(),
+                        request.releasedById(), receiverId, guardianName));
     }
 
     @Transactional
-    public void cancel(String medicationReleaseId, String reason) {
+    public void cancel(String medicationReleaseId, String reason, String actorId) {
         if (reason.getBytes(StandardCharsets.UTF_8).length > CANCEL_REASON_MAX_BYTES) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
@@ -82,7 +101,13 @@ public class MedicationReleaseService {
             throw new BusinessException(ErrorCode.RELEASE_ALREADY_CANCELLED);
         }
 
-        releaseCancelRepository.save(new ReleaseCancel(release, LocalDateTime.now(), reason, RELEASED_BY_PLACEHOLDER));
+        // 이미 반납이 기록된 불출은 취소할 수 없다 — 반납 때 재고가 복구됐는데 취소(+이어지는 조제취소)에서 또
+        // 복구하면 재고가 이중으로 늘어난다.
+        if (medicationReturnRepository.existsByMedicationRelease_MedicationReleaseId(medicationReleaseId)) {
+            throw new BusinessException(ErrorCode.RELEASE_CANCEL_BLOCKED_BY_RETURN);
+        }
+
+        releaseCancelRepository.save(new ReleaseCancel(release, LocalDateTime.now(), reason, actorId));
         release.cancel();
     }
 }

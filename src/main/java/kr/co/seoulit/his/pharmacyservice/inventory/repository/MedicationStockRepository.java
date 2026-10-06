@@ -49,6 +49,13 @@ public interface MedicationStockRepository extends JpaRepository<MedicationStock
             """)
     List<MedicationStock> findAvailableByMedicationIdOrderByExpirationDtAsc(@Param("medicationId") String medicationId);
 
+    /** 한 약품의 현재 전체 재고 합계(모든 로트/보관위치) — 처방전 상세에서 조제 가능 여부를 보여줄 때 쓴다 */
+    @Query("""
+            SELECT COALESCE(SUM(s.currentQty), 0) FROM MedicationStock s
+            WHERE s.medicationLot.medicationId = :medicationId
+            """)
+    BigDecimal sumCurrentQtyByMedicationId(@Param("medicationId") String medicationId);
+
     /** 재고부족 목록 — 현재 수량이 기준값 이하인 재고를 수량이 적은 순으로 조회 */
     @Query("""
             SELECT s FROM MedicationStock s

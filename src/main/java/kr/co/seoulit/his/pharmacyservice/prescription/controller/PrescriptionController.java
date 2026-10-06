@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import kr.co.seoulit.his.pharmacyservice.common.ApiResponse;
+import kr.co.seoulit.his.pharmacyservice.prescription.dto.DispenseRequest;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionCreatedEvent;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionDetailResponse;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionListResponse;
@@ -57,12 +58,13 @@ public class PrescriptionController {
             @RequestParam(required = false) String patientId,
             @RequestParam(required = false) String physicianId,
             @RequestParam(required = false) String departmentId,
+            @RequestParam(required = false) String stage,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
         Pageable pageable = PageRequest.of(page, size);
         Page<PrescriptionListResponse> result = prescriptionService.search(
-                prescriptionId, patientId, physicianId, departmentId, pageable);
+                prescriptionId, patientId, physicianId, departmentId, stage, pageable);
         return ApiResponse.success(result);
     }
 
@@ -73,8 +75,9 @@ public class PrescriptionController {
 
     @Operation(summary = "조제완료", description = "처리 후 처방코어/응급/병동에 결과 이벤트를 발행한다.")
     @PatchMapping("/{prescriptionLinkId}/dispense")
-    public ApiResponse<Void> dispense(@PathVariable String prescriptionLinkId) {
-        prescriptionService.dispense(prescriptionLinkId);
+    public ApiResponse<Void> dispense(@PathVariable String prescriptionLinkId,
+                                       @Valid @RequestBody DispenseRequest request) {
+        prescriptionService.dispense(prescriptionLinkId, request.actorId());
         return ApiResponse.success(null);
     }
 
@@ -82,7 +85,7 @@ public class PrescriptionController {
     @PatchMapping("/{prescriptionLinkId}/reject")
     public ApiResponse<Void> reject(@PathVariable String prescriptionLinkId,
                                      @Valid @RequestBody PrescriptionRejectRequest request) {
-        prescriptionService.reject(prescriptionLinkId, request.reason());
+        prescriptionService.reject(prescriptionLinkId, request.reason(), request.actorId());
         return ApiResponse.success(null);
     }
 
@@ -90,7 +93,7 @@ public class PrescriptionController {
     @PatchMapping("/{prescriptionLinkId}/cancel-dispense")
     public ApiResponse<Void> cancelDispense(@PathVariable String prescriptionLinkId,
                                              @Valid @RequestBody DispensingCancelRequest request) {
-        prescriptionService.cancelDispense(prescriptionLinkId, request.reason());
+        prescriptionService.cancelDispense(prescriptionLinkId, request.reason(), request.actorId());
         return ApiResponse.success(null);
     }
 }

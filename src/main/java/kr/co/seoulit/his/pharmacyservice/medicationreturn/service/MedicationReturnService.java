@@ -28,8 +28,7 @@ import java.time.LocalDate;
 public class MedicationReturnService {
 
     private static final String SOURCE_FORM_TYPE_RETURN = "RETURN";
-    private static final String RETURNED_BY_PLACEHOLDER = "SYSTEM";
-    private static final int REASON_MAX_BYTES = 20;
+    private static final int REASON_MAX_BYTES = 200;
 
     private final DispensingItemRepository dispensingItemRepository;
     private final MedicationReleaseRepository medicationReleaseRepository;
@@ -76,7 +75,7 @@ public class MedicationReturnService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.RELEASE_NOT_FOUND));
 
         MedicationReturn medicationReturn = medicationReturnRepository.save(
-                new MedicationReturn(release, LocalDate.now(), request.reason(), RETURNED_BY_PLACEHOLDER));
+                new MedicationReturn(release, LocalDate.now(), request.reason(), request.actorId()));
 
         MedicationReturnItem item = medicationReturnItemRepository.save(
                 new MedicationReturnItem(medicationReturn, dispensingItem, request.returnQty()));
@@ -85,7 +84,7 @@ public class MedicationReturnService {
         // 단계에서 다시 차감된다(이 흐름이 PHM 지시서 3-5에 명시된 "반납 시 복구, 폐기 시 재차감" 그대로다).
         stockMovementService.increaseLot(
                 dispensingItem.getMedicationLot(), request.returnQty(), StockMovementService.STOCK_TX_TYPE_RETURN,
-                medicationReturn.getMedicationReturnId(), SOURCE_FORM_TYPE_RETURN, RETURNED_BY_PLACEHOLDER);
+                medicationReturn.getMedicationReturnId(), SOURCE_FORM_TYPE_RETURN, request.actorId());
 
         return item;
     }

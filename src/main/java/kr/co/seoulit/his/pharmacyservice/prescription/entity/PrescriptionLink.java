@@ -50,6 +50,10 @@ public class PrescriptionLink extends BaseEntity {
     @Column(name = "REJECT_REASON")
     private String rejectReason;
 
+    // 조제거절을 처리한 직원 ID. 이 컬럼을 추가하기 전의 거절 건은 null이다.
+    @Column(name = "REJECTED_BY_ID", length = 100)
+    private String rejectedById;
+
     protected PrescriptionLink() {
     }
 
@@ -68,9 +72,10 @@ public class PrescriptionLink extends BaseEntity {
         this.status = PrescriptionStatus.DISPENSED;
     }
 
-    public void reject(String reason) {
+    public void reject(String reason, String rejectedById) {
         this.status = PrescriptionStatus.REJECTED;
         this.rejectReason = reason;
+        this.rejectedById = rejectedById;
     }
 
     /** 조제취소 — 다시 RECEIVED로 되돌려 재처리를 받을 수 있게 한다. */
@@ -113,5 +118,9 @@ public class PrescriptionLink extends BaseEntity {
 
     public String getRejectReason() {
         return rejectReason;
+    }
+
+    public String getRejectedById() {
+        return rejectedById;
     }
 }

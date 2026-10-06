@@ -10,6 +10,8 @@ import java.math.BigDecimal;
 public record DisposalCreateRequest(
         @NotBlank String medicationId,
         @NotNull @DecimalMin(value = "0.0", inclusive = false) BigDecimal quantity,
-        @NotBlank String reason
+        @NotBlank String reason,
+        // 일반 폐기에서는 필수(컨트롤러가 확인), 마약류 폐기는 요청 바깥의 staffId가 처리자라 비워서 온다.
+        String disposedById
 ) {
 }

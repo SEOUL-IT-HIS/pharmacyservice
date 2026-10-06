@@ -27,8 +27,7 @@ import java.time.LocalDate;
 public class ReturnedMedicationDisposalService {
 
     private static final String SOURCE_FORM_TYPE_DISPOSAL = "DISPOSAL";
-    private static final String DISPOSED_BY_PLACEHOLDER = "SYSTEM";
-    private static final int REASON_MAX_BYTES = 20;
+    private static final int REASON_MAX_BYTES = 200;
 
     private final MedicationReturnItemRepository medicationReturnItemRepository;
     private final MedicationDisposalRepository medicationDisposalRepository;
@@ -70,7 +69,7 @@ public class ReturnedMedicationDisposalService {
         }
 
         MedicationDisposal disposal = medicationDisposalRepository.save(
-                new MedicationDisposal(LocalDate.now(), DISPOSED_BY_PLACEHOLDER, request.reason()));
+                new MedicationDisposal(LocalDate.now(), request.actorId(), request.reason()));
 
         medicationDisposalItemRepository.save(new MedicationDisposalItem(
                 disposal, returnItem.getDispensingItem().getMedicationLot(), request.disposalQty()));
@@ -78,7 +77,7 @@ public class ReturnedMedicationDisposalService {
         // 반납 때 원래 로트로 복구해둔 재고를, 폐기 결정이 난 수량만큼 다시 차감한다.
         stockMovementService.decreaseLot(
                 returnItem.getDispensingItem().getMedicationLot(), request.disposalQty(), StockMovementService.STOCK_TX_TYPE_DISPOSAL,
-                disposal.getMedicationDisposalId(), SOURCE_FORM_TYPE_DISPOSAL, DISPOSED_BY_PLACEHOLDER);
+                disposal.getMedicationDisposalId(), SOURCE_FORM_TYPE_DISPOSAL, request.actorId());
 
         returnItem.addDisposalQty(request.disposalQty());
 

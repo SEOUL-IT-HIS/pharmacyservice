@@ -2,6 +2,10 @@ package kr.co.seoulit.his.pharmacyservice.release.repository;
 
 import kr.co.seoulit.his.pharmacyservice.release.entity.MedicationRelease;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import java.util.Collection;
+import java.util.List;
 
 import java.util.Optional;
 
@@ -16,4 +20,14 @@ public interface MedicationReleaseRepository extends JpaRepository<MedicationRel
     // 처방전 상세 화면에서 보여줄 불출 정보 — 취소된 것도 "다시 불출할 수 없다"는 걸 알려줘야
     // 하므로 상태 무관하게 조회한다.
     Optional<MedicationRelease> findByDispensing_DispensingId(String dispensingId);
+
+    // 처방전 목록에서 조제완료 건의 불출 상태를 한 번에 가져온다 — [처방전ID, 불출상태] 쌍의 목록
+    @Query("""
+            SELECT d.prescriptionLink.prescriptionLinkId, r.releaseStatusCd
+            FROM MedicationRelease r JOIN r.dispensing d
+            WHERE d.dispenseStatusCd = 'DISPENSED'
+              AND d.prescriptionLink.prescriptionLinkId IN :prescriptionLinkIds
+            """)
+    List<Object[]> findReleaseStatusesByPrescriptionLinkIds(
+            @Param("prescriptionLinkIds") Collection<String> prescriptionLinkIds);
 }

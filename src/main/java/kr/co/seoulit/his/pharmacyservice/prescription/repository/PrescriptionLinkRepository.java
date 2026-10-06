@@ -20,6 +20,18 @@ public interface PrescriptionLinkRepository extends JpaRepository<PrescriptionLi
               AND (:patientId IS NULL OR p.patientId = :patientId)
               AND (:physicianId IS NULL OR p.physicianId = :physicianId)
               AND (:departmentId IS NULL OR p.departmentId = :departmentId)
+              AND (:stage IS NULL OR :stage = 'ALL'
+                   OR (:stage = 'RECEIVED' AND p.status = kr.co.seoulit.his.pharmacyservice.prescription.entity.PrescriptionStatus.RECEIVED)
+                   OR (:stage = 'REJECTED' AND p.status = kr.co.seoulit.his.pharmacyservice.prescription.entity.PrescriptionStatus.REJECTED)
+                   OR (:stage = 'DISPENSED' AND p.status = kr.co.seoulit.his.pharmacyservice.prescription.entity.PrescriptionStatus.DISPENSED
+                       AND NOT EXISTS (SELECT 1 FROM MedicationRelease r JOIN r.dispensing d
+                                       WHERE d.prescriptionLink = p AND d.dispenseStatusCd = 'DISPENSED'))
+                   OR (:stage = 'RELEASED' AND p.status = kr.co.seoulit.his.pharmacyservice.prescription.entity.PrescriptionStatus.DISPENSED
+                       AND EXISTS (SELECT 1 FROM MedicationRelease r JOIN r.dispensing d
+                                   WHERE d.prescriptionLink = p AND d.dispenseStatusCd = 'DISPENSED' AND r.releaseStatusCd = 'RELEASED'))
+                   OR (:stage = 'RELEASE_CANCELLED' AND p.status = kr.co.seoulit.his.pharmacyservice.prescription.entity.PrescriptionStatus.DISPENSED
+                       AND EXISTS (SELECT 1 FROM MedicationRelease r JOIN r.dispensing d
+                                   WHERE d.prescriptionLink = p AND d.dispenseStatusCd = 'DISPENSED' AND r.releaseStatusCd = 'CANCELLED')))
             ORDER BY p.createdAt DESC
             """)
     Page<PrescriptionLink> search(
@@ -27,5 +39,6 @@ public interface PrescriptionLinkRepository extends JpaRepository<PrescriptionLi
             @Param("patientId") String patientId,
             @Param("physicianId") String physicianId,
             @Param("departmentId") String departmentId,
+            @Param("stage") String stage,
             Pageable pageable);
 }

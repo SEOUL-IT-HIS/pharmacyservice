@@ -2,10 +2,13 @@ package kr.co.seoulit.his.pharmacyservice.prescription.service;
 
 import kr.co.seoulit.his.pharmacyservice.common.BusinessException;
 import kr.co.seoulit.his.pharmacyservice.common.ErrorCode;
-import kr.co.seoulit.his.pharmacyservice.inventory.entity.MedicationLot;
+import kr.co.seoulit.his.pharmacyservice.inventory.repository.MedicationStockRepository;
 import kr.co.seoulit.his.pharmacyservice.inventory.service.StockMovementService;
 import kr.co.seoulit.his.pharmacyservice.medication.entity.Medication;
 import kr.co.seoulit.his.pharmacyservice.medication.repository.MedicationRepository;
+import kr.co.seoulit.his.pharmacyservice.medicationreturn.entity.MedicationReturnItem;
+import kr.co.seoulit.his.pharmacyservice.medicationreturn.repository.MedicationReturnItemRepository;
+import kr.co.seoulit.his.pharmacyservice.prescription.dto.DispensingLotResponse;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.DosageFormCode;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionCreatedEvent;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionDetailResponse;
@@ -37,11 +40,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Service
 @Transactional(readOnly = true)
@@ -51,14 +53,8 @@ public class PrescriptionService {
 
     private static final String SOURCE_FORM_TYPE_DISPENSING = "DISPENSING";
     private static final String SOURCE_FORM_TYPE_DISPENSING_CANCEL = "DISPENSING_CANCEL";
-    /** 조제완료/조제취소 처리자 입력란이 아직 화면에 없어 임시로 고정값을 사용한다 (출고/폐기와 동일한 단순화) */
-    private static final String DISPENSED_BY_PLACEHOLDER = "SYSTEM";
-    /** CANCEL_REASON_CD 컬럼이 20바이트라, 그 안에 들어가는 사유만 저장하고 넘으면 400으로 막는다 */
-    private static final int CANCEL_REASON_MAX_BYTES = 20;
-    /** frequency/durationDays(자유 텍스트)에서 맨 앞 숫자만 뽑아낸다. 예: "3회"->3, "1일 3회"처럼
-     *  두 숫자가 섞인 문자열은 앞쪽 숫자를 잘못 집을 수 있어 그런 경우는 아예 못 뽑은 것으로 친다
-     *  (아래 parseLeadingCount 참고). */
-    private static final Pattern FIRST_NUMBER = Pattern.compile("^\\D*(\\d+)\\D*$");
+    /** CANCEL_REASON_CD 컬럼(200바이트)에 들어가는 사유만 저장하고 넘으면 400으로 막는다 */
+    private static final int CANCEL_REASON_MAX_BYTES = 200;
 
     private final PrescriptionLinkRepository prescriptionLinkRepository;
     private final PrescriptionItemLinkRepository prescriptionItemLinkRepository;
@@ -69,6 +65,8 @@ public class PrescriptionService {
     private final DispensingCancelRepository dispensingCancelRepository;
     private final StockMovementService stockMovementService;
     private final MedicationReleaseRepository medicationReleaseRepository;
+    private final MedicationStockRepository medicationStockRepository;
+    private final MedicationReturnItemRepository medicationReturnItemRepository;
 
     public PrescriptionService(PrescriptionLinkRepository prescriptionLinkRepository,
                                 PrescriptionItemLinkRepository prescriptionItemLinkRepository,
@@ -78,7 +76,9 @@ public class PrescriptionService {
                                 DispensingItemRepository dispensingItemRepository,
                                 DispensingCancelRepository dispensingCancelRepository,
                                 StockMovementService stockMovementService,
-                                MedicationReleaseRepository medicationReleaseRepository) {
+                                MedicationReleaseRepository medicationReleaseRepository,
+                                MedicationStockRepository medicationStockRepository,
+                                MedicationReturnItemRepository medicationReturnItemRepository) {
         this.prescriptionLinkRepository = prescriptionLinkRepository;
         this.prescriptionItemLinkRepository = prescriptionItemLinkRepository;
         this.medicationRepository = medicationRepository;
@@ -88,6 +88,8 @@ public class PrescriptionService {
         this.dispensingCancelRepository = dispensingCancelRepository;
         this.stockMovementService = stockMovementService;
         this.medicationReleaseRepository = medicationReleaseRepository;
+        this.medicationStockRepository = medicationStockRepository;
+        this.medicationReturnItemRepository = medicationReturnItemRepository;
     }
 
     /**
@@ -142,45 +144,33 @@ public class PrescriptionService {
     /**
      * 조제완료 처리. 완료 즉시 결과 이벤트를 발행해서 처방코어/응급/병동에 동시 통지한다.
      * 이미 처리된(DISPENSED/REJECTED) 건은 다시 처리할 수 없다(PHM010).
+     * 한 약품이 한 로트의 재고로 모자라면 유효기간이 빠른 로트부터 여러 로트에서 이어서 차감하고,
+     * 로트마다 조제 상세(DispensingItem)를 한 줄씩 남긴다. 하나라도 전체 재고가 모자라면 전부 롤백된다.
      */
     @Transactional
-    public void dispense(String prescriptionLinkId) {
+    public void dispense(String prescriptionLinkId, String actorId) {
         PrescriptionLink link = getReceivedLinkOrThrow(prescriptionLinkId);
 
-        Dispensing dispensing = dispensingRepository.save(new Dispensing(link, LocalDate.now()));
+        Dispensing dispensing = dispensingRepository.save(new Dispensing(link, LocalDate.now(), actorId));
 
         List<PrescriptionItemLink> items = prescriptionItemLinkRepository
                 .findByPrescriptionLink_PrescriptionLinkId(prescriptionLinkId);
         for (PrescriptionItemLink item : items) {
-            // 조제완료 = 처방 항목만큼 약국 재고에서 실제로 빠져나가는 시점. dosageQty는 "1회 투여량"이라
-            // 그대로 차감하면 안 되고, frequency(1일 투여횟수) x durationDays(투약일수)를 곱한 총
-            // 조제량을 차감해야 한다. 이전엔 이 곱셈이 빠져서 1회분만 차감되고 있었다(알약은 소량이라
-            // 티가 안 났지만 수액/주사로 가면 오차가 커짐 — 2026-10-06 발견).
-            //
-            // frequency/durationDays는 외래가 자유 텍스트로 보내는 필드라("1일 3회"처럼 숫자+단위가
-            // 섞여 올 수 있음) 신뢰도 있게 통째로 파싱할 수 없다. 한 문자열에 숫자가 정확히 하나만
-            // 있을 때만(예: "3", "3회", "1일 3회"는 숫자가 둘이라 제외) 그 숫자를 쓰고, 그 외엔 1로
-            // 본다(= 그 구간은 곱하지 않음, 기존처럼 1회분만 차감하는 것과 동일한 보수적 동작).
-            // 즉 "1"처럼 흔한 단일 숫자 포맷에서는 정확히 계산되고, 애매한 복합 문자열에서는 예전
-            // 동작으로 안전하게 폴백된다.
-            int timesPerDay = parseLeadingCount(item.getFrequency());
-            int days = parseLeadingCount(item.getDurationDays());
-            BigDecimal totalQty = item.getDosageQty()
-                    .multiply(BigDecimal.valueOf(timesPerDay))
-                    .multiply(BigDecimal.valueOf(days));
-            // frequency/durationDays 둘 중 하나라도 값은 있는데 숫자 하나로 못 읽어서 1로 폴백된
-            // 경우는 실제로 그 구간만큼 덜 차감되고 있다는 뜻이라 추적할 수 있게 로그를 남긴다.
-            if (isAmbiguousCount(item.getFrequency()) || isAmbiguousCount(item.getDurationDays())) {
+            DispenseQuantity.Calculation calc = DispenseQuantity.of(item);
+            // 횟수/일수를 숫자로 못 읽어 1로 폴백된 경우는 그 구간만큼 덜 차감되고 있다는 뜻이라 추적할 수 있게 남긴다.
+            if (calc.ambiguous()) {
                 log.warn("frequency/durationDays를 숫자로 못 읽어서 그 구간은 1로 계산함(과소 차감 위험). "
                                 + "prescriptionItemLinkId={}, frequency={}, durationDays={}",
                         item.getPrescriptionItemLinkId(), item.getFrequency(), item.getDurationDays());
             }
 
-            StockMovementService.Result result = stockMovementService.decreaseFefo(
-                    item.getMedicationId(), totalQty, StockMovementService.STOCK_TX_TYPE_DISPENSING,
-                    dispensing.getDispensingId(), SOURCE_FORM_TYPE_DISPENSING, DISPENSED_BY_PLACEHOLDER);
-            dispensingItemRepository.save(new DispensingItem(
-                    dispensing, item, result.lot(), totalQty, totalQty));
+            List<StockMovementService.Result> results = stockMovementService.decreaseFefo(
+                    item.getMedicationId(), calc.totalQty(), StockMovementService.STOCK_TX_TYPE_DISPENSING,
+                    dispensing.getDispensingId(), SOURCE_FORM_TYPE_DISPENSING, actorId);
+            for (StockMovementService.LotQty lotQty : StockMovementService.groupByLot(results)) {
+                dispensingItemRepository.save(new DispensingItem(
+                        dispensing, item, lotQty.lot(), calc.totalQty(), lotQty.qty()));
+            }
         }
 
         link.dispense();
@@ -194,7 +184,7 @@ public class PrescriptionService {
      * 알리는 것은 이번 범위 밖이라, 필요해지면 별도 이벤트 타입으로 설계해야 한다.
      */
     @Transactional
-    public void cancelDispense(String prescriptionLinkId, String reason) {
+    public void cancelDispense(String prescriptionLinkId, String reason, String actorId) {
         if (reason.getBytes(StandardCharsets.UTF_8).length > CANCEL_REASON_MAX_BYTES) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
@@ -206,14 +196,20 @@ public class PrescriptionService {
                 .findByPrescriptionLink_PrescriptionLinkIdAndDispenseStatusCd(prescriptionLinkId, Dispensing.STATUS_DISPENSED)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DISPENSING_NOT_FOUND));
 
+        // 이미 환자/병동에 불출된 상태에서 조제를 취소하면, 나간 약의 재고가 되살아난다. 먼저 불출을 취소해야 한다.
+        if (medicationReleaseRepository.findByDispensing_DispensingIdAndReleaseStatusCd(
+                dispensing.getDispensingId(), MedicationRelease.STATUS_RELEASED).isPresent()) {
+            throw new BusinessException(ErrorCode.DISPENSE_CANCEL_BLOCKED_BY_RELEASE);
+        }
+
         List<DispensingItem> items = dispensingItemRepository.findByDispensing_DispensingId(dispensing.getDispensingId());
         for (DispensingItem item : items) {
             stockMovementService.increaseLot(
                     item.getMedicationLot(), item.getDispensedQty(), StockMovementService.STOCK_TX_TYPE_DISPENSING_CANCEL,
-                    dispensing.getDispensingId(), SOURCE_FORM_TYPE_DISPENSING_CANCEL, DISPENSED_BY_PLACEHOLDER);
+                    dispensing.getDispensingId(), SOURCE_FORM_TYPE_DISPENSING_CANCEL, actorId);
         }
 
-        dispensingCancelRepository.save(new DispensingCancel(dispensing, LocalDate.now(), reason, DISPENSED_BY_PLACEHOLDER));
+        dispensingCancelRepository.save(new DispensingCancel(dispensing, LocalDate.now(), reason, actorId));
         dispensing.cancel();
         link.backToReceived();
     }
@@ -223,9 +219,9 @@ public class PrescriptionService {
      * 사용자에게 보여줄 수 있는 문구로 받는다.
      */
     @Transactional
-    public void reject(String prescriptionLinkId, String reason) {
+    public void reject(String prescriptionLinkId, String reason, String actorId) {
         PrescriptionLink link = getReceivedLinkOrThrow(prescriptionLinkId);
-        link.reject(reason);
+        link.reject(reason, actorId);
         prescriptionResultPublisher.publish(link);
     }
 
@@ -242,36 +238,27 @@ public class PrescriptionService {
     }
 
     /**
-     * frequency/durationDays(자유 텍스트)에서 숫자를 뽑는다. 문자열 전체에 숫자가 정확히
-     * 한 덩어리만 있을 때만(앞뒤로 비숫자 문자는 몇 개든 허용 — "3", "3회", "1일" 전부 허용)
-     * 그 값을 쓰고, 그 외(숫자가 없거나 둘 이상 섞인 경우)엔 1을 반환한다 — 곱셈에서 그 구간을
-     * 사실상 빼는 것과 같아, 못 읽은 값을 멋대로 추측하는 것보다 안전하다.
+     * 처방전 목록. stage로 업무 단계를 걸러 볼 수 있다 — RECEIVED(접수) / DISPENSED(조제완료, 불출 대기) /
+     * RELEASED(불출완료) / RELEASE_CANCELLED(불출취소됨) / REJECTED(거절) / 없거나 ALL(전체).
+     * 조제완료 건에는 불출 상태(releaseStatusCd)를 같이 내려준다.
      */
-    private static int parseLeadingCount(String text) {
-        if (text == null) {
-            return 1;
-        }
-        Matcher matcher = FIRST_NUMBER.matcher(text.trim());
-        if (!matcher.matches()) {
-            return 1;
-        }
-        try {
-            return Integer.parseInt(matcher.group(1));
-        } catch (NumberFormatException e) {
-            return 1;
-        }
-    }
-
-    /** 값은 비어있지 않은데(= 뭔가 보내긴 했는데) FIRST_NUMBER 패턴에 안 맞아 1로 폴백되는 경우. */
-    private static boolean isAmbiguousCount(String text) {
-        return text != null && !text.isBlank() && !FIRST_NUMBER.matcher(text.trim()).matches();
-    }
-
     public Page<PrescriptionListResponse> search(String prescriptionId, String patientId, String physicianId,
-                                                  String departmentId, Pageable pageable) {
-        return prescriptionLinkRepository
-                .search(prescriptionId, patientId, physicianId, departmentId, pageable)
-                .map(PrescriptionListResponse::from);
+                                                  String departmentId, String stage, Pageable pageable) {
+        Page<PrescriptionLink> page = prescriptionLinkRepository
+                .search(prescriptionId, patientId, physicianId, departmentId, stage, pageable);
+
+        Map<String, String> releaseStatusByLinkId = new HashMap<>();
+        List<String> dispensedLinkIds = page.getContent().stream()
+                .filter(link -> link.getStatus() == PrescriptionStatus.DISPENSED)
+                .map(PrescriptionLink::getPrescriptionLinkId)
+                .toList();
+        if (!dispensedLinkIds.isEmpty()) {
+            for (Object[] row : medicationReleaseRepository.findReleaseStatusesByPrescriptionLinkIds(dispensedLinkIds)) {
+                releaseStatusByLinkId.put((String) row[0], (String) row[1]);
+            }
+        }
+
+        return page.map(link -> PrescriptionListResponse.from(link, releaseStatusByLinkId.get(link.getPrescriptionLinkId())));
     }
 
     public PrescriptionDetailResponse getDetail(String prescriptionLinkId) {
@@ -279,18 +266,20 @@ public class PrescriptionService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.PRESCRIPTION_NOT_FOUND));
 
         // 조제완료(DISPENSED) 상태일 때만 활성 Dispensing이 있다. 조제취소돼 RECEIVED로 돌아갔으면
-        // 이전 Dispensing은 CANCELLED라 여기 안 잡히고, 항목별 dispensingItemId/불출 정보도 비게 된다
+        // 이전 Dispensing은 CANCELLED라 여기 안 잡히고, 항목별 조제 로트/불출 정보도 비게 된다
         // (반납/불출은 전부 "지금 조제완료 상태인 건"에만 의미가 있으므로 이게 맞다).
         Dispensing activeDispensing = dispensingRepository
                 .findByPrescriptionLink_PrescriptionLinkIdAndDispenseStatusCd(prescriptionLinkId, Dispensing.STATUS_DISPENSED)
                 .orElse(null);
 
-        Map<String, DispensingItem> dispensingItemByPrescriptionItemLinkId = new HashMap<>();
+        // 처방항목 하나가 여러 로트에서 조제됐을 수 있어 항목ID별로 DispensingItem을 모은다.
+        Map<String, List<DispensingItem>> dispensingItemsByPrescriptionItemLinkId = new HashMap<>();
         ReleaseInfoResponse release = null;
         if (activeDispensing != null) {
             for (DispensingItem dispensingItem : dispensingItemRepository.findByDispensing_DispensingId(activeDispensing.getDispensingId())) {
-                dispensingItemByPrescriptionItemLinkId.put(
-                        dispensingItem.getPrescriptionItemLink().getPrescriptionItemLinkId(), dispensingItem);
+                dispensingItemsByPrescriptionItemLinkId
+                        .computeIfAbsent(dispensingItem.getPrescriptionItemLink().getPrescriptionItemLinkId(), key -> new ArrayList<>())
+                        .add(dispensingItem);
             }
             // RELEASED든 CANCELLED든 상태 무관하게 보여준다 — 취소된 적이 있으면 이 Dispensing으로는
             // 다시 불출할 수 없다는 걸(DB 유니크 제약) 화면에서도 알 수 있어야 "불출" 버튼을 다시
@@ -306,10 +295,44 @@ public class PrescriptionService {
         List<PrescriptionItemResponse> items = prescriptionItemLinkRepository
                 .findByPrescriptionLink_PrescriptionLinkId(prescriptionLinkId)
                 .stream()
-                .map(item -> PrescriptionItemResponse.from(
-                        item, dispensingItemByPrescriptionItemLinkId.get(item.getPrescriptionItemLinkId())))
+                .map(item -> toItemResponse(item,
+                        dispensingItemsByPrescriptionItemLinkId.getOrDefault(item.getPrescriptionItemLinkId(), List.of())))
                 .toList();
 
-        return PrescriptionDetailResponse.from(link, items, release);
+        return PrescriptionDetailResponse.from(link, items, release,
+                activeDispensing == null ? null : activeDispensing.getDispensedById());
+    }
+
+    private PrescriptionItemResponse toItemResponse(PrescriptionItemLink item, List<DispensingItem> dispensingItems) {
+        Medication medication = findMedication(item.getMedicationId());
+        DispenseQuantity.Calculation calc = DispenseQuantity.of(item);
+        BigDecimal availableQty = medicationStockRepository.sumCurrentQtyByMedicationId(item.getMedicationId());
+
+        List<DispensingLotResponse> lots = dispensingItems.stream()
+                .map(dispensingItem -> new DispensingLotResponse(
+                        dispensingItem.getDispensingItemId(),
+                        dispensingItem.getMedicationLot().getLotNo(),
+                        dispensingItem.getMedicationLot().getExpirationDt(),
+                        dispensingItem.getDispensedQty(),
+                        medicationReturnItemRepository
+                                .findByDispensingItem_DispensingItemId(dispensingItem.getDispensingItemId())
+                                .stream()
+                                .map(MedicationReturnItem::getReturnQty)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add)))
+                .toList();
+
+        return PrescriptionItemResponse.from(
+                item,
+                medication == null ? null : medication.getMedicationName(),
+                medication == null ? null : medication.getEdiCode(),
+                calc.totalQty(), calc.ambiguous(), availableQty, lots);
+    }
+
+    private Medication findMedication(String medicationId) {
+        try {
+            return medicationRepository.findById(Long.parseLong(medicationId)).orElse(null);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }

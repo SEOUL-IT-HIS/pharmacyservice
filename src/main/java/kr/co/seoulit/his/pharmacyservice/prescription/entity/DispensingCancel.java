@@ -28,7 +28,7 @@ public class DispensingCancel extends BaseEntity {
     private LocalDate cancelDt;
 
     // DB 컬럼은 20바이트 코드값용(_CD)이다. PrescriptionService에서 저장 전에 길이를 검증한다.
-    @Column(name = "CANCEL_REASON_CD", nullable = false, length = 20)
+    @Column(name = "CANCEL_REASON_CD", nullable = false, length = 200)
     private String cancelReasonCd;
 
     @Column(name = "CANCELED_BY_ID", nullable = false)

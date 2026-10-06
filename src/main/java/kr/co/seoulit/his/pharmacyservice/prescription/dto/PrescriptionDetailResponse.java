@@ -17,11 +17,15 @@ public record PrescriptionDetailResponse(
         String rejectReason,
         List<PrescriptionItemResponse> items,
         // 가장 최근 조제(Dispensing) 건의 불출 상태. 조제 전이거나 아직 불출하지 않았으면 null.
-        ReleaseInfoResponse release
+        ReleaseInfoResponse release,
+        // 조제완료를 처리한 약사의 직원 ID. 조제 전이거나, 이 컬럼이 생기기 전의 조제건이면 null.
+        String dispensedById,
+        // 조제거절을 처리한 약사의 직원 ID. 거절 건이 아니거나 이전 데이터면 null.
+        String rejectedById
 ) {
 
     public static PrescriptionDetailResponse from(PrescriptionLink link, List<PrescriptionItemResponse> items,
-                                                   ReleaseInfoResponse release) {
+                                                   ReleaseInfoResponse release, String dispensedById) {
         return new PrescriptionDetailResponse(
                 link.getPrescriptionLinkId(),
                 link.getPrescriptionId(),
@@ -32,7 +36,9 @@ public record PrescriptionDetailResponse(
                 link.getStatus(),
                 link.getRejectReason(),
                 items,
-                release
+                release,
+                dispensedById,
+                link.getRejectedById()
         );
     }
 }

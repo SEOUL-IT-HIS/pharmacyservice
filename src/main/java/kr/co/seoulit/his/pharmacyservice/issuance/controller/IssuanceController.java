@@ -2,6 +2,8 @@ package kr.co.seoulit.his.pharmacyservice.issuance.controller;
 
 import jakarta.validation.Valid;
 import kr.co.seoulit.his.pharmacyservice.common.ApiResponse;
+import kr.co.seoulit.his.pharmacyservice.common.BusinessException;
+import kr.co.seoulit.his.pharmacyservice.common.ErrorCode;
 import kr.co.seoulit.his.pharmacyservice.issuance.dto.IssuanceCreateRequest;
 import kr.co.seoulit.his.pharmacyservice.issuance.dto.IssuanceListResponse;
 import kr.co.seoulit.his.pharmacyservice.issuance.service.IssuanceService;
@@ -35,7 +37,11 @@ public class IssuanceController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<Void> create(@Valid @RequestBody IssuanceCreateRequest request) {
-        issuanceService.create(request);
+        // 처리자 없이는 출고를 기록하지 않는다 — 예전에는 고정값 SYSTEM으로 저장돼 누가 했는지 알 수 없었다.
+        if (request.issuedById() == null || request.issuedById().isBlank()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+        issuanceService.create(request, request.issuedById());
         return ApiResponse.success(null);
     }
 }

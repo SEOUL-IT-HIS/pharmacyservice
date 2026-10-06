@@ -38,7 +38,7 @@ public class MedicationReleaseController {
     @PatchMapping("/{medicationReleaseId}/cancel")
     public ApiResponse<Void> cancel(@PathVariable String medicationReleaseId,
                                      @Valid @RequestBody ReleaseCancelRequest request) {
-        medicationReleaseService.cancel(medicationReleaseId, request.reason());
+        medicationReleaseService.cancel(medicationReleaseId, request.reason(), request.actorId());
         return ApiResponse.success(null);
     }
 }

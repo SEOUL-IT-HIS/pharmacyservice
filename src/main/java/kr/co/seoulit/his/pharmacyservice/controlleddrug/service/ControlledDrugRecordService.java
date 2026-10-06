@@ -64,14 +64,14 @@ public class ControlledDrugRecordService {
 
     @Transactional
     public List<ControlledDrugRecordResponse> recordIssuance(ControlledDrugIssuanceRequest request) {
-        MedicationIssue issue = issuanceService.create(request.issuance());
+        MedicationIssue issue = issuanceService.create(request.issuance(), request.staffId());
         List<InventoryMovement> movements = inventoryMovementRepository.findBySourceFormId(issue.getMedicationIssueId());
         return recordAll(movements, request.staffId(), StockMovementService.STOCK_TX_TYPE_ISSUANCE, request.witnessStaffIds());
     }
 
     @Transactional
     public List<ControlledDrugRecordResponse> recordDisposal(ControlledDrugDisposalRequest request) {
-        MedicationDisposal disposal = disposalService.create(request.disposal());
+        MedicationDisposal disposal = disposalService.create(request.disposal(), request.staffId());
         List<InventoryMovement> movements = inventoryMovementRepository.findBySourceFormId(disposal.getMedicationDisposalId());
         return recordAll(movements, request.staffId(), StockMovementService.STOCK_TX_TYPE_DISPOSAL, request.witnessStaffIds());
     }

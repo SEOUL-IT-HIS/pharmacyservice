@@ -34,7 +34,7 @@ public class ReturnedMedicationDisposal extends BaseEntity {
     private BigDecimal disposalQty;
 
     // DB 컬럼은 20바이트 코드값용(_CD)이다. 서비스에서 저장 전에 길이를 검증한다.
-    @Column(name = "DISPOSAL_REASON_CD", nullable = false, length = 20)
+    @Column(name = "DISPOSAL_REASON_CD", nullable = false, length = 200)
     private String disposalReasonCd;
 
     protected ReturnedMedicationDisposal() {

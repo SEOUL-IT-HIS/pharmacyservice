@@ -38,15 +38,31 @@ public class MedicationRelease extends BaseEntity {
     @Column(name = "RELEASE_STATUS_CD", nullable = false, length = 20)
     private String releaseStatusCd;
 
+    // 불출을 처리한 약사. 이 컬럼들을 추가하기 전에 만들어진 불출건은 null이다.
+    @Column(name = "RELEASED_BY_ID", length = 100)
+    private String releasedById;
+
+    // 병동(WARD)에 불출할 때 약을 받은 병동 직원(간호사 등)의 직원 ID
+    @Column(name = "RECEIVED_BY_ID", length = 100)
+    private String receivedById;
+
+    // 보호자(GUARDIAN)에게 불출할 때 받은 보호자 이름. 보호자는 시스템에 등록된 사람이 아니라 직접 입력받는다.
+    @Column(name = "GUARDIAN_NAME", length = 100)
+    private String guardianName;
+
     protected MedicationRelease() {
     }
 
-    public MedicationRelease(Dispensing dispensing, LocalDateTime releasedAt, String recipientTypeCd) {
+    public MedicationRelease(Dispensing dispensing, LocalDateTime releasedAt, String recipientTypeCd,
+                              String releasedById, String receivedById, String guardianName) {
         this.medicationReleaseId = UUID.randomUUID().toString();
         this.dispensing = dispensing;
         this.releasedAt = releasedAt;
         this.recipientTypeCd = recipientTypeCd;
         this.releaseStatusCd = STATUS_RELEASED;
+        this.releasedById = releasedById;
+        this.receivedById = receivedById;
+        this.guardianName = guardianName;
     }
 
     public void cancel() {
@@ -76,5 +92,17 @@ public class MedicationRelease extends BaseEntity {
 
     public String getReleaseStatusCd() {
         return releaseStatusCd;
+    }
+
+    public String getReleasedById() {
+        return releasedById;
+    }
+
+    public String getReceivedById() {
+        return receivedById;
+    }
+
+    public String getGuardianName() {
+        return guardianName;
     }
 }

@@ -26,7 +26,7 @@ public class MedicationDisposal extends BaseEntity {
 
     // DB 컬럼은 20바이트 코드값용(_CD)이다. 아직 프론트가 자유 텍스트로 사유를 받고 있어
     // 20바이트를 넘는 입력은 DisposalService에서 저장 전에 400으로 막는다.
-    @Column(name = "DISPOSAL_REASON_CD", nullable = false, length = 20)
+    @Column(name = "DISPOSAL_REASON_CD", nullable = false, length = 200)
     private String disposalReasonCd;
 
     protected MedicationDisposal() {

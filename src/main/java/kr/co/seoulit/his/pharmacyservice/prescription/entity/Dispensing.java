@@ -37,14 +37,19 @@ public class Dispensing extends BaseEntity {
     @Column(name = "DISPENSE_STATUS_CD", nullable = false, length = 20)
     private String dispenseStatusCd;
 
+    // 조제완료를 처리한 직원 ID. 이 컬럼을 추가하기 전에 만들어진 조제건은 null이다.
+    @Column(name = "DISPENSED_BY_ID", length = 100)
+    private String dispensedById;
+
     protected Dispensing() {
     }
 
-    public Dispensing(PrescriptionLink prescriptionLink, LocalDate dispensingDt) {
+    public Dispensing(PrescriptionLink prescriptionLink, LocalDate dispensingDt, String dispensedById) {
         this.dispensingId = UUID.randomUUID().toString();
         this.prescriptionLink = prescriptionLink;
         this.dispensingDt = dispensingDt;
         this.dispenseStatusCd = STATUS_DISPENSED;
+        this.dispensedById = dispensedById;
     }
 
     public void cancel() {
@@ -70,5 +75,9 @@ public class Dispensing extends BaseEntity {
 
     public String getDispenseStatusCd() {
         return dispenseStatusCd;
+    }
+
+    public String getDispensedById() {
+        return dispensedById;
     }
 }

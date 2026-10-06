@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 public record MedicationReturnCreateRequest(
         @NotBlank String dispensingItemId,
         @NotNull @DecimalMin(value = "0.0", inclusive = false) BigDecimal returnQty,
-        @NotBlank String reason
+        @NotBlank String reason,
+        @NotBlank String actorId
 ) {
 }

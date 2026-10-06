@@ -23,7 +23,7 @@ import java.util.Set;
 /**
  * 약품 출고(HL2-8 등록 / HL2-9 조회).
  * MEDICATION_ISSUE(헤더) + MEDICATION_ISSUE_ITEM(상세)에 정식으로 기록하고, 재고 차감은
- * 유효기간이 빠른 로트(FEFO)부터 하나만 골라 처리한다(여러 로트로 쪼개는 것은 지원하지 않음).
+ * 유효기간이 빠른 로트(FEFO)부터 차감하고, 한 로트로 모자라면 여러 로트로 나눠 차감한다.
  */
 @Service
 public class IssuanceService {
@@ -31,8 +31,6 @@ public class IssuanceService {
     /** 출고 유형 — ADM 공통코드에 아직 등록 전이라 임시로 "일반출고" 한 종류만 쓴다(학습용 단순화) */
     private static final String ISSUE_TYPE_GENERAL = "01";
     private static final String SOURCE_FORM_TYPE_ISSUANCE = "ISSUANCE";
-    /** 출고 등록 화면에 담당자 입력란이 없어 임시로 고정값을 사용한다 (인증 연동 전까지의 학습용 단순화) */
-    private static final String ISSUED_BY_PLACEHOLDER = "SYSTEM";
 
     private final MedicationIssueRepository medicationIssueRepository;
     private final MedicationIssueItemRepository medicationIssueItemRepository;
@@ -55,16 +53,17 @@ public class IssuanceService {
     // 마약류 입출고(controlleddrug 패키지)가 이 메서드를 그대로 재사용하면서, 방금 생긴
     // INVENTORY_MOVEMENT를 찾아 CONTROLLED_DRUG_RECORD를 남겨야 해서 헤더를 반환한다.
     @Transactional
-    public MedicationIssue create(IssuanceCreateRequest request) {
+    public MedicationIssue create(IssuanceCreateRequest request, String issuedById) {
         MedicationIssue issue = medicationIssueRepository.save(
-                new MedicationIssue(ISSUED_BY_PLACEHOLDER, ISSUE_TYPE_GENERAL));
+                new MedicationIssue(issuedById, ISSUE_TYPE_GENERAL));
 
-        StockMovementService.Result result = stockMovementService.decreaseFefo(
+        // 유효기간이 빠른 로트부터 차감하고, 한 로트로 모자라면 다음 로트로 이어서 차감한다 — 로트마다 한 줄씩 기록.
+        List<StockMovementService.Result> results = stockMovementService.decreaseFefo(
                 request.medicationId(), request.quantity(), StockMovementService.STOCK_TX_TYPE_ISSUANCE,
-                issue.getMedicationIssueId(), SOURCE_FORM_TYPE_ISSUANCE, ISSUED_BY_PLACEHOLDER);
-
-        medicationIssueItemRepository.save(
-                new MedicationIssueItem(issue, result.lot(), request.quantity()));
+                issue.getMedicationIssueId(), SOURCE_FORM_TYPE_ISSUANCE, issuedById);
+        for (StockMovementService.LotQty lotQty : StockMovementService.groupByLot(results)) {
+            medicationIssueItemRepository.save(new MedicationIssueItem(issue, lotQty.lot(), lotQty.qty()));
+        }
 
         return issue;
     }

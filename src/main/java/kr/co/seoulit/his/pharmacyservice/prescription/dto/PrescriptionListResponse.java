@@ -12,10 +12,12 @@ public record PrescriptionListResponse(
         String physicianId,
         String departmentId,
         LocalDateTime createdAt,
-        PrescriptionStatus status
+        PrescriptionStatus status,
+        // 조제완료(DISPENSED) 건의 불출 상태 — RELEASED(불출됨) / CANCELLED(불출취소됨) / null(아직 불출 전, 또는 조제완료가 아님)
+        String releaseStatusCd
 ) {
 
-    public static PrescriptionListResponse from(PrescriptionLink link) {
+    public static PrescriptionListResponse from(PrescriptionLink link, String releaseStatusCd) {
         return new PrescriptionListResponse(
                 link.getPrescriptionLinkId(),
                 link.getPrescriptionId(),
@@ -23,7 +25,8 @@ public record PrescriptionListResponse(
                 link.getPhysicianId(),
                 link.getDepartmentId(),
                 link.getCreatedAt(),
-                link.getStatus()
+                link.getStatus(),
+                releaseStatusCd
         );
     }
 }
