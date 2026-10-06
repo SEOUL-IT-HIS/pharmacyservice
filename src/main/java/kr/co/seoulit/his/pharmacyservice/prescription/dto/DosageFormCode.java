@@ -21,23 +21,37 @@ import java.util.Arrays;
  *
  * 외래(GR2)는 처방 항목마다 이 3개 코드 중 하나를 반드시 dosageFormCd에 실어 보내야 하고,
  * 그 외 값은 저장 시점에 거절된다({@link kr.co.seoulit.his.pharmacyservice.common.ErrorCode#INVALID_DOSAGE_FORM_CODE}).
+ *
+ * [정정 2026-10-06] 실제로 admin에 등록된 DOSAGE_FORM_CD 공통코드 값은 "TAB"/"IV"/"INJ" 같은
+ * 영문 리터럴이 아니라 숫자코드 "01"(Tablet/Capsule)/"02"(IV Fluid)/"03"(Injection)이다
+ * (외래 PrescriptionForm.tsx, 입원 registerForm.tsx, 응급 commonDrugs.ts가 모두 이 숫자코드로
+ * 드롭다운을 채우고 그대로 전송함 — hisfrontend 소스 직접 대조). 이 enum이 이전까지
+ * isValid()에서 v.name()("TAB" 등)과 비교하고 있어서, 외래/입원/응급이 실제로 보내는 "01"/"02"/"03"
+ * 값은 전부 거절되고 있었다(PHM009). enum 이름(TAB/IV/INJ)은 Java 코드 가독성용으로 유지하고,
+ * 실제 코드값 비교는 code 필드("01"/"02"/"03")로 한다.
  */
 public enum DosageFormCode {
 
-    /** 알약/캡슐약(경구 고형제) */
-    TAB("알약/캡슐약", new BigDecimal("500")),
-    /** 수액 */
-    IV("수액", new BigDecimal("1000")),
-    /** 주사 */
-    INJ("주사", new BigDecimal("1500"));
+    /** 알약/캡슐약(경구 고형제) — admin DOSAGE_FORM_CD 공통코드값 "01"(Tablet/Capsule) */
+    TAB("01", "알약/캡슐약", new BigDecimal("500")),
+    /** 수액 — admin DOSAGE_FORM_CD 공통코드값 "02"(IV Fluid) */
+    IV("02", "수액", new BigDecimal("1000")),
+    /** 주사 — admin DOSAGE_FORM_CD 공통코드값 "03"(Injection) */
+    INJ("03", "주사", new BigDecimal("1500"));
 
+    private final String code;
     private final String label;
     /** 참고용 대표 수가 — 실제 청구 금액 계산·확정은 수납(billing-service) 소관이다. */
     private final BigDecimal referenceBillingPrice;
 
-    DosageFormCode(String label, BigDecimal referenceBillingPrice) {
+    DosageFormCode(String code, String label, BigDecimal referenceBillingPrice) {
+        this.code = code;
         this.label = label;
         this.referenceBillingPrice = referenceBillingPrice;
+    }
+
+    public String getCode() {
+        return code;
     }
 
     public String getLabel() {
@@ -52,6 +66,13 @@ public enum DosageFormCode {
         if (code == null) {
             return false;
         }
-        return Arrays.stream(values()).anyMatch(v -> v.name().equals(code));
+        return Arrays.stream(values()).anyMatch(v -> v.code.equals(code));
+    }
+
+    public static DosageFormCode fromCode(String code) {
+        return Arrays.stream(values())
+                .filter(v -> v.code.equals(code))
+                .findFirst()
+                .orElse(null);
     }
 }

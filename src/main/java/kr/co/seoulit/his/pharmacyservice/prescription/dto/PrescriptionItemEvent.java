@@ -16,8 +16,9 @@ import java.math.BigDecimal;
  * frequency/durationDays는 외래 쪽 필드 타입(String)을 그대로 따른다 — 숫자로 강제 변환하다
  * "1일 2회"처럼 텍스트가 섞여 오면 역직렬화가 깨질 수 있어서다.
  *
- * dosageFormCd: {@link DosageFormCode}에 정의된 3개 값(TAB/IV/INJ) 중 하나만 허용한다.
- * 이 값이 수납(billing) 쪽 대표 수가코드와 맞춰지므로 임의 문자열은 저장 시점에 거절된다.
+ * dosageFormCd: admin 공통코드 DOSAGE_FORM_CD의 3개 값("01" 알약/캡슐·"02" 수액·"03" 주사,
+ * {@link DosageFormCode} 참고) 중 하나만 허용한다. 이 값이 수납(billing) 쪽 대표 수가코드와
+ * 맞춰지므로 임의 문자열은 저장 시점에 거절된다.
  */
 public record PrescriptionItemEvent(
         @NotBlank String ediCode,

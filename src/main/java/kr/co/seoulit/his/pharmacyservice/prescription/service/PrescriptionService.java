@@ -98,12 +98,12 @@ public class PrescriptionService {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
 
-        // dosageFormCd는 자유형식이 아니라 DosageFormCode(TAB/IV/INJ) 3개 값만 허용한다.
+        // dosageFormCd는 자유형식이 아니라 admin 공통코드 DOSAGE_FORM_CD의 3개 값("01"/"02"/"03")만 허용한다.
         // 수납(billing) 쪽이 이 3개 대표 항목으로만 수가를 계산하기로 확정했기 때문에(21.10절),
         // 여기서 미리 걸러내지 않으면 잘못된 코드가 그대로 저장돼 나중에 수납 연동에서 조용히 깨진다.
         for (PrescriptionItemEvent itemEvent : event.items()) {
             if (!DosageFormCode.isValid(itemEvent.dosageFormCd())) {
-                log.error("허용되지 않는 dosageFormCd. prescriptionId={}, ediCode={}, dosageFormCd={} (허용값: TAB/IV/INJ)",
+                log.error("허용되지 않는 dosageFormCd. prescriptionId={}, ediCode={}, dosageFormCd={} (허용값: 01/02/03)",
                         event.prescriptionId(), itemEvent.ediCode(), itemEvent.dosageFormCd());
                 throw new BusinessException(ErrorCode.INVALID_DOSAGE_FORM_CODE);
             }

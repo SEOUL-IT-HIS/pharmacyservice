@@ -74,8 +74,11 @@ class PrescriptionServiceTest {
     }
 
     private PrescriptionItemEvent newItemEvent(String ediCode) {
+        // dosageFormCd는 admin 공통코드 DOSAGE_FORM_CD 값("01"=알약/캡슐)이다. 2026-10-06 이전엔
+        // enum 이름(TAB)과 그대로 비교했었는데, 실제 외래/입원/응급이 보내는 값은 숫자코드라
+        // DosageFormCode가 code 필드 비교로 바뀌었다 — 테스트 픽스처도 같이 맞춘다.
         return new PrescriptionItemEvent(
-                ediCode, "타이레놀정500mg", BigDecimal.valueOf(500), "TAB",
+                ediCode, "타이레놀정500mg", BigDecimal.valueOf(500), "01",
                 "1일 3회", "5일", "식후 30분 복용");
     }
 
@@ -105,7 +108,7 @@ class PrescriptionServiceTest {
         PrescriptionItemLink savedItem = itemCaptor.getValue();
         assertThat(savedItem.getMedicationId()).isEqualTo("1");
         assertThat(savedItem.getDosageQty()).isEqualByComparingTo(BigDecimal.valueOf(500));
-        assertThat(savedItem.getDosageFormCd()).isEqualTo("TAB");
+        assertThat(savedItem.getDosageFormCd()).isEqualTo("01");
         assertThat(savedItem.getFrequency()).isEqualTo("1일 3회");
         assertThat(savedItem.getDurationDays()).isEqualTo("5일");
         assertThat(savedItem.getDetailInfo()).isEqualTo("식후 30분 복용");

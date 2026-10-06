@@ -8,6 +8,7 @@ import kr.co.seoulit.his.pharmacyservice.medication.dto.MedicationDto;
 import kr.co.seoulit.his.pharmacyservice.medication.dto.MedicationRegisterRequest;
 import kr.co.seoulit.his.pharmacyservice.medication.entity.Medication;
 import kr.co.seoulit.his.pharmacyservice.medication.repository.MedicationRepository;
+import kr.co.seoulit.his.pharmacyservice.prescription.dto.DosageFormCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -66,7 +67,13 @@ public class MedicationServiceImpl implements MedicationService {
     @Override
     @Transactional
     public void registerMedication(MedicationRegisterRequest request) {
-        // medicationName 필수 체크는 컨트롤러의 @Valid(@NotBlank)가 처리한다.
+        // medicationName/dosageFormCd 필수 체크는 컨트롤러의 @Valid(@NotBlank)가 처리하지만,
+        // dosageFormCd는 "값이 있는지"뿐 아니라 "허용된 코드인지"까지 서버에서 한 번 더 막아야 한다
+        // (화면은 드롭다운이라 보통 안전하지만, API를 직접 호출하면 임의 문자열이 들어올 수 있다).
+        if (!DosageFormCode.isValid(request.getDosageFormCd())) {
+            throw new BusinessException(ErrorCode.INVALID_DOSAGE_FORM_CODE);
+        }
+
         Medication medication = new Medication();
         medication.setMedicationName(request.getMedicationName().trim());
         medication.setItemSeq(blankToNull(request.getItemSeq()));
@@ -76,6 +83,7 @@ public class MedicationServiceImpl implements MedicationService {
         medication.setClassNo(blankToNull(request.getClassNo()));
         medication.setClassName(blankToNull(request.getClassName()));
         medication.setFormCodeName(blankToNull(request.getFormCodeName()));
+        medication.setDosageFormCd(request.getDosageFormCd());
         medication.setChart(blankToNull(request.getChart()));
         medication.setItemPermitDate(request.getItemPermitDate());
         medication.setEdiCode(blankToNull(request.getEdiCode()));
@@ -180,6 +188,9 @@ public class MedicationServiceImpl implements MedicationService {
         medication.setClassNo(textOrNull(item, "CLASS_NO"));
         medication.setClassName(textOrNull(item, "CLASS_NAME"));
         medication.setFormCodeName(textOrNull(item, "FORM_CODE_NAME"));
+        // "의약품 낱알식별정보" 공공API는 경구 정제·캡슐만 내려주므로 임포트되는 행은 전부
+        // 알약/캡슐(TAB="01")로 채운다. 주사약·수액은 이 API에 없어 화면 수동 등록으로만 추가된다.
+        medication.setDosageFormCd(DosageFormCode.TAB.getCode());
         medication.setChart(textOrNull(item, "CHART"));
         medication.setItemPermitDate(parseItemPermitDate(textOrNull(item, "ITEM_PERMIT_DATE")));
         medication.setEdiCode(textOrNull(item, "EDI_CODE"));
@@ -216,6 +227,7 @@ public class MedicationServiceImpl implements MedicationService {
         dto.setClassNo(medication.getClassNo());
         dto.setClassName(medication.getClassName());
         dto.setFormCodeName(medication.getFormCodeName());
+        dto.setDosageFormCd(medication.getDosageFormCd());
         dto.setChart(medication.getChart());
         dto.setItemPermitDate(medication.getItemPermitDate());
         dto.setEdiCode(medication.getEdiCode());

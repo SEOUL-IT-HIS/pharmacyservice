@@ -51,6 +51,21 @@ public class Medication {
     @Column(name = "FORM_CODE_NAME", length = 100)
     private String formCodeName;
 
+    /**
+     * 제형 대분류(투약형태코드) — admin 공통코드 DOSAGE_FORM_CD를 그대로 재사용한다
+     * ("01" 알약/캡슐·"02" 수액·"03" 주사, {@link kr.co.seoulit.his.pharmacyservice.prescription.dto.DosageFormCode} 참고).
+     * 외래/입원/응급 처방 화면의 드롭다운과 같은 코드그룹이라 새 그룹을 만들지 않았다.
+     *
+     * FORM_CODE_NAME(제형, 공공API 원문 자유텍스트 — 예: "경질캡슐")과는 역할이 다르다:
+     * FORM_CODE_NAME은 상세 설명, DOSAGE_FORM_CD는 재고·처방 화면에서 "주사약만 보기" 같은
+     * 필터링에 쓸 수 있는 구조화된 분류값이다.
+     *
+     * 2026-10-06 이전에 공공API로 적재된 기존 행은 전부 알약/캡슐이라("낱알식별정보" API 자체가
+     * 경구 정제·캡슐 전용) 마이그레이션 시 전부 "01"로 채워도 안전하다.
+     */
+    @Column(name = "DOSAGE_FORM_CD", length = 2)
+    private String dosageFormCd;
+
     @Column(name = "CHART", length = 1000)
     private String chart;
 
