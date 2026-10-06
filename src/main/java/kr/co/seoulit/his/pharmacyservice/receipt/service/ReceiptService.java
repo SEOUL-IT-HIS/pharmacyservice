@@ -18,6 +18,8 @@ import kr.co.seoulit.his.pharmacyservice.receipt.entity.MedicationReceiptItem;
 import kr.co.seoulit.his.pharmacyservice.receipt.repository.InventoryMovementRepository;
 import kr.co.seoulit.his.pharmacyservice.receipt.repository.MedicationReceiptItemRepository;
 import kr.co.seoulit.his.pharmacyservice.receipt.repository.MedicationReceiptRepository;
+import kr.co.seoulit.his.pharmacyservice.supplier.repository.SupplierRepository;
+import kr.co.seoulit.his.pharmacyservice.storagelocation.repository.StorageLocationRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,23 +44,37 @@ public class ReceiptService {
     private final MedicationStockRepository medicationStockRepository;
     private final InventoryMovementRepository inventoryMovementRepository;
     private final MedicationRepository medicationRepository;
+    private final SupplierRepository supplierRepository;
+    private final StorageLocationRepository storageLocationRepository;
 
     public ReceiptService(MedicationReceiptRepository medicationReceiptRepository,
                            MedicationReceiptItemRepository medicationReceiptItemRepository,
                            MedicationLotRepository medicationLotRepository,
                            MedicationStockRepository medicationStockRepository,
                            InventoryMovementRepository inventoryMovementRepository,
-                           MedicationRepository medicationRepository) {
+                           MedicationRepository medicationRepository,
+                           SupplierRepository supplierRepository,
+                           StorageLocationRepository storageLocationRepository) {
         this.medicationReceiptRepository = medicationReceiptRepository;
         this.medicationReceiptItemRepository = medicationReceiptItemRepository;
         this.medicationLotRepository = medicationLotRepository;
         this.medicationStockRepository = medicationStockRepository;
         this.inventoryMovementRepository = inventoryMovementRepository;
         this.medicationRepository = medicationRepository;
+        this.supplierRepository = supplierRepository;
+        this.storageLocationRepository = storageLocationRepository;
     }
 
     @Transactional
     public ReceiptCreateResponse createReceipt(ReceiptCreateRequest request) {
+        // 공급처/보관위치도 약품마스터(medicationId)와 같은 이유로 실제 등록된 값인지 먼저 막는다
+        // — 화면이 Select로 바뀌어도 API를 직접 호출하면 임의 ID가 들어올 수 있다.
+        if (!supplierRepository.existsById(request.supplierId())) {
+            throw new BusinessException(ErrorCode.SUPPLIER_NOT_FOUND);
+        }
+        if (!storageLocationRepository.existsById(request.storageLocationId())) {
+            throw new BusinessException(ErrorCode.STORAGE_LOCATION_NOT_FOUND);
+        }
         validateNoDuplicateItems(request.items());
 
         MedicationReceipt receipt = medicationReceiptRepository.save(

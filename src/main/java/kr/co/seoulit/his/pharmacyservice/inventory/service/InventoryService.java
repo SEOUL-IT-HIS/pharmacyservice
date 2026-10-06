@@ -2,12 +2,15 @@ package kr.co.seoulit.his.pharmacyservice.inventory.service;
 
 import kr.co.seoulit.his.pharmacyservice.common.BusinessException;
 import kr.co.seoulit.his.pharmacyservice.common.ErrorCode;
+import kr.co.seoulit.his.pharmacyservice.inventory.dto.InventoryMovementResponse;
 import kr.co.seoulit.his.pharmacyservice.inventory.dto.InventoryResponse;
 import kr.co.seoulit.his.pharmacyservice.inventory.entity.MedicationStock;
 import kr.co.seoulit.his.pharmacyservice.inventory.repository.MedicationStockRepository;
 import kr.co.seoulit.his.pharmacyservice.medication.entity.Medication;
 import kr.co.seoulit.his.pharmacyservice.medication.repository.MedicationRepository;
+import kr.co.seoulit.his.pharmacyservice.receipt.repository.InventoryMovementRepository;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,11 +30,23 @@ public class InventoryService {
 
     private final MedicationStockRepository medicationStockRepository;
     private final MedicationRepository medicationRepository;
+    private final InventoryMovementRepository inventoryMovementRepository;
 
     public InventoryService(MedicationStockRepository medicationStockRepository,
-                             MedicationRepository medicationRepository) {
+                             MedicationRepository medicationRepository,
+                             InventoryMovementRepository inventoryMovementRepository) {
         this.medicationStockRepository = medicationStockRepository;
         this.medicationRepository = medicationRepository;
+        this.inventoryMovementRepository = inventoryMovementRepository;
+    }
+
+    /** 약품 상세(품목 중심 워크스페이스)의 "최근 입출고 내역" 패널용 — 품목 하나의 이동 이력을 최신순 상위 limit건만 */
+    public List<InventoryMovementResponse> findRecentMovements(String medicationId, int limit) {
+        Pageable pageable = PageRequest.of(0, Math.max(1, limit));
+        return inventoryMovementRepository.findByMedicationIdOrderByMovementAtDesc(medicationId, pageable)
+                .stream()
+                .map(InventoryMovementResponse::from)
+                .toList();
     }
 
     /**

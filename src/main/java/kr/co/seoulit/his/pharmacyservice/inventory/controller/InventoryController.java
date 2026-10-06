@@ -1,6 +1,7 @@
 package kr.co.seoulit.his.pharmacyservice.inventory.controller;
 
 import kr.co.seoulit.his.pharmacyservice.common.ApiResponse;
+import kr.co.seoulit.his.pharmacyservice.inventory.dto.InventoryMovementResponse;
 import kr.co.seoulit.his.pharmacyservice.inventory.dto.InventoryResponse;
 import kr.co.seoulit.his.pharmacyservice.inventory.service.InventoryService;
 import org.springframework.data.domain.Page;
@@ -54,5 +55,17 @@ public class InventoryController {
     @GetMapping("/low-stock-list")
     public ApiResponse<List<InventoryResponse>> findLowStock(@RequestParam int threshold) {
         return ApiResponse.success(inventoryService.findLowStock(threshold));
+    }
+
+    /**
+     * 약품 상세(품목 중심 워크스페이스)의 "최근 입출고 내역" 패널용.
+     * 예: GET /api/pharmacy/inventories/medications/4150/movements?limit=20
+     */
+    @GetMapping("/medications/{medicationId}/movements")
+    public ApiResponse<List<InventoryMovementResponse>> findRecentMovements(
+            @PathVariable String medicationId,
+            @RequestParam(defaultValue = "20") int limit
+    ) {
+        return ApiResponse.success(inventoryService.findRecentMovements(medicationId, limit));
     }
 }
