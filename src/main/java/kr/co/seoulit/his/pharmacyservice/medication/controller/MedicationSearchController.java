@@ -5,6 +5,9 @@ import kr.co.seoulit.his.pharmacyservice.common.ApiResponse;
 import kr.co.seoulit.his.pharmacyservice.medication.dto.MedicationDto;
 import kr.co.seoulit.his.pharmacyservice.medication.service.MedicationService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -19,6 +22,8 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/pharmacy/medications")
 public class MedicationSearchController {
+
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final MedicationService medicationService;
 
@@ -41,5 +46,22 @@ public class MedicationSearchController {
         List<MedicationDto> result = medicationService.search(name);
         log.info("약품 이름 검색. name={}, 매칭건수={}", name, result.size());
         return ApiResponse.success(result);
+    }
+
+    @Operation(
+            summary = "약품 목록(페이지)",
+            description = "타 서비스(응급 등)의 약품 선택 목록용. 이름이 비어 있어도 전체를 이름순 페이지로 반환합니다. "
+                    + "name은 약품명 일부(선택), ediCodeOnly=true면 EDI 코드가 있는 약품만(코드가 없는 약품은 처방 접수가 안 됩니다). "
+                    + "page는 0부터, size는 최대 100. 응답의 ediCode를 처방 이벤트의 약품 식별값으로 그대로 사용합니다."
+    )
+    @GetMapping("/page")
+    public ApiResponse<Page<MedicationDto>> searchPage(
+            @RequestParam(required = false, defaultValue = "") String name,
+            @RequestParam(defaultValue = "false") boolean ediCodeOnly,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE));
+        return ApiResponse.success(medicationService.searchPage(name, ediCodeOnly, pageable));
     }
 }
