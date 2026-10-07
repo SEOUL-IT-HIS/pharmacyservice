@@ -2,7 +2,9 @@ package kr.co.seoulit.his.pharmacyservice.prescription.consumer;
 
 import kr.co.seoulit.his.pharmacyservice.common.BusinessException;
 import kr.co.seoulit.his.pharmacyservice.common.ErrorCode;
+import kr.co.seoulit.his.pharmacyservice.prescription.dto.PharmacyOrderCancelledEvent;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PharmacyOrderRequestedEvent;
+import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionCancelledEvent;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionCreatedEvent;
 import kr.co.seoulit.his.pharmacyservice.prescription.dto.PrescriptionItemEvent;
 import kr.co.seoulit.his.pharmacyservice.prescription.service.PrescriptionService;
@@ -44,7 +46,7 @@ class PrescriptionEventConsumerTest {
                 "1일 3회", "5일", "식후 30분 복용");
         return new PrescriptionCreatedEvent(
                 "PRESCRIPTION-100", "PATIENT-001", "PHYSICIAN-001", "DEPARTMENT-001",
-                OffsetDateTime.parse("2026-07-16T09:00:00+09:00"), List.of(item));
+                OffsetDateTime.parse("2026-07-16T09:00:00+09:00"), null, null, null, List.of(item));
     }
 
     private PharmacyOrderRequestedEvent newEnvelope(PrescriptionCreatedEvent data) {
@@ -84,6 +86,42 @@ class PrescriptionEventConsumerTest {
     @Test
     void onPrescriptionCreated_doesNothing_whenEnvelopeDataIsNull() {
         consumer.onPrescriptionCreated(newEnvelope(null));
+
+        verifyNoInteractions(prescriptionService);
+    }
+
+    private PharmacyOrderCancelledEvent newCancelEnvelope(PrescriptionCancelledEvent data) {
+        return new PharmacyOrderCancelledEvent(
+                "EVENT-002", "PharmacyOrderCancelled", "v1",
+                OffsetDateTime.parse("2026-07-16T10:00:00+09:00"), "OPD", data);
+    }
+
+    @Test
+    void onPrescriptionCancelled_delegatesToService() {
+        PrescriptionCancelledEvent data = new PrescriptionCancelledEvent(
+                "PRESCRIPTION-100", "환자 요청", "DOCTOR-01", List.of());
+
+        consumer.onPrescriptionCancelled(newCancelEnvelope(data));
+
+        verify(prescriptionService).cancelByPrescription(data);
+    }
+
+    @Test
+    void onPrescriptionCancelled_doesNotPropagate_whenServiceThrowsBusinessException() {
+        PrescriptionCancelledEvent data = new PrescriptionCancelledEvent(
+                "PRESCRIPTION-100", "환자 요청", "DOCTOR-01", List.of());
+        doThrow(new BusinessException(ErrorCode.DISPENSING_NOT_FOUND))
+                .when(prescriptionService).cancelByPrescription(data);
+
+        assertThatCode(() -> consumer.onPrescriptionCancelled(newCancelEnvelope(data))).doesNotThrowAnyException();
+    }
+
+    @Test
+    void onPrescriptionCancelled_doesNothing_whenEnvelopeOrDataInvalid() {
+        consumer.onPrescriptionCancelled(null);
+        consumer.onPrescriptionCancelled(newCancelEnvelope(null));
+        consumer.onPrescriptionCancelled(newCancelEnvelope(
+                new PrescriptionCancelledEvent(null, "사유", "DOCTOR-01", List.of())));
 
         verifyNoInteractions(prescriptionService);
     }

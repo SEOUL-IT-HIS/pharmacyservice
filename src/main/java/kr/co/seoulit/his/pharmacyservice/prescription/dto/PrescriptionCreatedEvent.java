@@ -28,6 +28,12 @@ public record PrescriptionCreatedEvent(
         @NotBlank String physicianId,
         @NotBlank String departmentId,
         @NotNull OffsetDateTime createdAt,
+        // 진료구분 OPD/ER/IP. 외래/응급/입원 어디서 온 처방인지. 모르면 null.
+        String encounterType,
+        // 처방 우선순위 — admin 공통코드 ORDER_PRIORITY_CD 값: 01 STAT / 02 Urgent / 03 Routine. 원값 그대로 저장한다.
+        String priorityCode,
+        // 구두처방 여부 Y/N. 처방코어가 의사 확정 전에도 보내고 확정 갱신 이벤트는 보내지 않아, 약제는 확정 여부를 알 수 없다.
+        String verbalYn,
         @NotEmpty List<@Valid PrescriptionItemEvent> items
 ) {
 }

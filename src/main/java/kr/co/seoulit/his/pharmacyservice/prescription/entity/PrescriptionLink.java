@@ -15,6 +15,9 @@ import java.util.UUID;
 @Table(name = "PRESCRIPTION_LINK")
 public class PrescriptionLink extends BaseEntity {
 
+    public static final String CANCEL_OUTCOME_APPLIED = "APPLIED";
+    public static final String CANCEL_OUTCOME_REFUSED = "REFUSED";
+
     @Id
     @Column(name = "PRESCRIPTION_LINK_ID", length = 36)
     private String prescriptionLinkId;
@@ -54,6 +57,30 @@ public class PrescriptionLink extends BaseEntity {
     @Column(name = "REJECTED_BY_ID", length = 100)
     private String rejectedById;
 
+    // 처방코어가 처방을 취소한 사유/취소자. CANCELLED 상태일 때만 값이 있다.
+    @Column(name = "CANCEL_REASON", length = 200)
+    private String cancelReason;
+
+    @Column(name = "CANCELLED_BY_ID", length = 100)
+    private String cancelledById;
+
+    // 처방코어의 취소 통보를 받은 시각과 처리 결과(CANCEL_OUTCOME_APPLIED/REFUSED). 통보를 받은 적 없으면 둘 다 null.
+    @Column(name = "CANCEL_REQUESTED_AT")
+    private LocalDateTime cancelRequestedAt;
+
+    @Column(name = "CANCEL_OUTCOME", length = 20)
+    private String cancelOutcome;
+
+    // 처방 출처/긴급도/구두 여부. 이 컬럼을 추가하기 전의 처방이거나 보내지 않은 경우 null.
+    @Column(name = "ENCOUNTER_TYPE", length = 10)
+    private String encounterType;
+
+    @Column(name = "PRIORITY_CODE", length = 10)
+    private String priorityCode;
+
+    @Column(name = "VERBAL_YN", length = 1)
+    private String verbalYn;
+
     protected PrescriptionLink() {
     }
 
@@ -66,6 +93,12 @@ public class PrescriptionLink extends BaseEntity {
         this.departmentId = departmentId;
         this.createdAt = createdAt;
         this.status = PrescriptionStatus.RECEIVED;
+    }
+
+    public void applyOrderMeta(String encounterType, String priorityCode, String verbalYn) {
+        this.encounterType = encounterType;
+        this.priorityCode = priorityCode;
+        this.verbalYn = verbalYn;
     }
 
     public void dispense() {
@@ -81,6 +114,26 @@ public class PrescriptionLink extends BaseEntity {
     /** 조제취소 — 다시 RECEIVED로 되돌려 재처리를 받을 수 있게 한다. */
     public void backToReceived() {
         this.status = PrescriptionStatus.RECEIVED;
+    }
+
+    /** 처방코어의 처방 취소 통보 반영. 종결 상태라 다시 RECEIVED로 돌아가지 않는다. */
+    public void cancel(String reason, String cancelledById) {
+        this.status = PrescriptionStatus.CANCELLED;
+        this.cancelReason = reason;
+        this.cancelledById = cancelledById;
+        this.cancelRequestedAt = LocalDateTime.now();
+        this.cancelOutcome = CANCEL_OUTCOME_APPLIED;
+    }
+
+    /**
+     * 취소 통보를 받았지만 불출이 끝나 반영하지 못한 경우. 상태는 그대로 두고 통보 사실만 남겨
+     * 약사가 화면에서 확인할 수 있게 한다.
+     */
+    public void markCancelRefused(String reason, String cancelledById) {
+        this.cancelReason = reason;
+        this.cancelledById = cancelledById;
+        this.cancelRequestedAt = LocalDateTime.now();
+        this.cancelOutcome = CANCEL_OUTCOME_REFUSED;
     }
 
     @Override
@@ -122,5 +175,33 @@ public class PrescriptionLink extends BaseEntity {
 
     public String getRejectedById() {
         return rejectedById;
+    }
+
+    public String getCancelReason() {
+        return cancelReason;
+    }
+
+    public String getCancelledById() {
+        return cancelledById;
+    }
+
+    public LocalDateTime getCancelRequestedAt() {
+        return cancelRequestedAt;
+    }
+
+    public String getCancelOutcome() {
+        return cancelOutcome;
+    }
+
+    public String getEncounterType() {
+        return encounterType;
+    }
+
+    public String getPriorityCode() {
+        return priorityCode;
+    }
+
+    public String getVerbalYn() {
+        return verbalYn;
     }
 }

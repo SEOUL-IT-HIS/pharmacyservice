@@ -111,9 +111,9 @@ class PrescriptionControllerTest {
     void search_returns200_withList() throws Exception {
         PrescriptionListResponse response = new PrescriptionListResponse(
                 "LINK-001", "PRESCRIPTION-001", "PATIENT-001", "PHYSICIAN-001", "DEPARTMENT-001",
-                LocalDateTime.of(2026, 7, 16, 9, 0), PrescriptionStatus.RECEIVED);
+                LocalDateTime.of(2026, 7, 16, 9, 0), PrescriptionStatus.RECEIVED, null, null, null, null, null, null);
         Page<PrescriptionListResponse> page = new PageImpl<>(List.of(response), PageRequest.of(0, 20), 1);
-        when(prescriptionService.search(any(), any(), any(), any(), any())).thenReturn(page);
+        when(prescriptionService.search(any(), any(), any(), any(), any(), any())).thenReturn(page);
 
         mockMvc.perform(get("/api/pharmacy/prescriptions"))
                 .andExpect(status().isOk())
@@ -124,7 +124,7 @@ class PrescriptionControllerTest {
     void getDetail_returns200_withItems() throws Exception {
         PrescriptionDetailResponse response = new PrescriptionDetailResponse(
                 "LINK-001", "PRESCRIPTION-001", "PATIENT-001", "PHYSICIAN-001", "DEPARTMENT-001",
-                LocalDateTime.of(2026, 7, 16, 9, 0), PrescriptionStatus.RECEIVED, null, List.of(), null);
+                LocalDateTime.of(2026, 7, 16, 9, 0), PrescriptionStatus.RECEIVED, null, List.of(), null, null, null, null, null, null, null, null, null, null);
         when(prescriptionService.getDetail("LINK-001")).thenReturn(response);
 
         mockMvc.perform(get("/api/pharmacy/prescriptions/LINK-001"))
