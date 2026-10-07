@@ -73,7 +73,7 @@ public class PrescriptionController {
         return ApiResponse.success(prescriptionService.getDetail(prescriptionLinkId));
     }
 
-    @Operation(summary = "조제완료", description = "처리 후 처방코어/응급/병동에 결과 이벤트를 발행한다.")
+    @Operation(summary = "조제완료", description = "처리 후 응급/병동에 결과 이벤트를 발행한다.")
     @PatchMapping("/{prescriptionLinkId}/dispense")
     public ApiResponse<Void> dispense(@PathVariable String prescriptionLinkId,
                                        @Valid @RequestBody DispenseRequest request) {
@@ -81,7 +81,7 @@ public class PrescriptionController {
         return ApiResponse.success(null);
     }
 
-    @Operation(summary = "조제거절", description = "처리 후 처방코어/응급/병동에 결과 이벤트를 발행한다.")
+    @Operation(summary = "조제거절", description = "처리 후 응급/병동에 결과 이벤트를 발행한다.")
     @PatchMapping("/{prescriptionLinkId}/reject")
     public ApiResponse<Void> reject(@PathVariable String prescriptionLinkId,
                                      @Valid @RequestBody PrescriptionRejectRequest request) {

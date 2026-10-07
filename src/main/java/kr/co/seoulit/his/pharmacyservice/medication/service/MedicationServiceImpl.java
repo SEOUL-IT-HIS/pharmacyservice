@@ -12,6 +12,8 @@ import kr.co.seoulit.his.pharmacyservice.prescription.dto.DosageFormCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -62,6 +64,12 @@ public class MedicationServiceImpl implements MedicationService {
                 .stream()
                 .map(this::toMedicationDto)
                 .toList();
+    }
+
+    @Override
+    public Page<MedicationDto> searchPage(String medicationName, boolean ediCodeOnly, Pageable pageable) {
+        String name = medicationName == null ? "" : medicationName.trim();
+        return medicationRepository.searchPage(name, ediCodeOnly, pageable).map(this::toMedicationDto);
     }
 
     @Override
